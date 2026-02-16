@@ -1060,12 +1060,31 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
 
 
     // Filter valid coupons - Show individually (no grouping for split bundles)
-    const walletItems = customerCoupons.map(coupon => ({
-        ...coupon,
-        individualDiscount: coupon.metadata?.discount_value || null,
-        originalTotal: coupon.metadata?.original_total || null,
-        part: coupon.metadata?.part || null
-    }));
+    const walletItems = customerCoupons
+        .filter(c => {
+            // Filter out consumed parts
+            if (c.status !== 'ACTIVE' && c.status !== 'active') return false;
+
+            // If it's a bonus, check current value
+            if (c.metadata?.source === 'BUNDLE_BONUS') {
+                const bonusVal = c.metadata?.current_bonus_value;
+                if (bonusVal === 0 || bonusVal === '0') return false;
+            }
+
+            // For split parts (paid package), hide if metadata says part is 0 (should already be USED but just in case)
+            const p = c.metadata?.part;
+            if (p === 0 || p === '0') return false;
+
+            return true;
+        })
+        .map(coupon => ({
+            ...coupon,
+            individualDiscount: coupon.metadata?.source === 'BUNDLE_BONUS'
+                ? coupon.metadata?.current_bonus_value
+                : (coupon.metadata?.discount_value || null),
+            originalTotal: coupon.metadata?.original_total || null,
+            part: coupon.metadata?.part || null
+        }));
 
     // --- CALCULATIONS FOR PREVIEW ---
     const billAmount = parseFloat(amount) || 0;
@@ -1077,7 +1096,7 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
 
     if (selectedCouponGroup) {
         selectedRewardConfig = selectedCouponGroup.campaigns?.reward_config || {};
-        // Use individual discount value for split bundles
+        // Use individual discount value (which is current_bonus_value for bonuses)
         const discountValue = selectedCouponGroup.individualDiscount !== null
             ? selectedCouponGroup.individualDiscount
             : selectedRewardConfig.value;
@@ -1572,9 +1591,10 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                                     {/* Cancel Selection */}
                                     <button
                                         onClick={() => setSelectedCouponGroup(null)}
-                                        className="h-14 w-14 rounded-2xl bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-white flex items-center justify-center transition-all"
+                                        className="h-20 w-16 rounded-2xl bg-slate-800 hover:bg-red-900/40 border border-slate-700 hover:border-red-500/50 text-slate-400 hover:text-red-500 flex flex-col items-center justify-center transition-all group"
                                     >
-                                        <XCircle size={24} />
+                                        <XCircle size={24} className="group-hover:rotate-90 transition-transform duration-300" />
+                                        <span className="text-[9px] font-black uppercase mt-1">{t('cancel') || 'Cancel'}</span>
                                     </button>
                                 </div>
                             )}
@@ -1636,6 +1656,8 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                                     const campaignName = (coupon.campaigns?.name || '').toLowerCase();
                                     const bundleType = coupon.metadata?.bundle_type || '';
                                     const isMeatBundle = bundleType.includes('meat') || campaignName.includes('لحم');
+                                    const isMeat = isMeatBundle; // Alias for consistency with patch
+                                    const partNum = coupon.part === 0 ? 'BONUS' : coupon.part; // Define partNum for BONUS label
 
                                     return (
                                         <button
@@ -1655,7 +1677,7 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                                         >
                                             {/* Part Badge - For split bundles */}
                                             {partLabel && (
-                                                <div className={`absolute -top-1.5 -right-1.5 text-[8px] font-black px-1.5 py-0.5 rounded-full z-10 
+                                                <div className={`absolute -top-1.5 -right-1.5 text-[8px] font-black px-1.5 py-0.5 rounded-full z-10
                                                     ${isSelected
                                                         ? isMeatBundle ? 'bg-white text-red-600' : 'bg-white text-purple-600'
                                                         : isMeatBundle
@@ -1664,19 +1686,20 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                                                     {partLabel}
                                                 </div>
                                             )}
-
-                                            {reward.type === 'PERCENTAGE' && (
-                                                <span className={`text-xl font-black mb-0 transition-colors ${isSelected ? 'text-white' : isMeatBundle ? 'text-red-300 group-hover:text-red-200' : 'text-white group-hover:text-purple-400'}`}>
-                                                    {displayDiscount}%
+                                            {/* Discount Value Display */}
+                                            <div className="flex flex-col items-center">
+                                                <span className={`text-xl font-black mb-0 transition-colors ${isSelected ? 'text-white' : isMeat ? 'text-red-300 group-hover:text-red-200' : 'text-white group-hover:text-purple-400'}`}>
+                                                    {reward.type === 'PERCENTAGE' ? `${displayDiscount}%` : `${currency}${displayDiscount}`}
                                                 </span>
-                                            )}
-                                            <span className={`text-[9px] font-bold uppercase tracking-tighter text-center line-clamp-1 leading-none transition-colors mt-0.5
-                                                ${isSelected
-                                                    ? isMeatBundle ? 'text-red-200' : 'text-purple-200'
-                                                    : isMeatBundle ? 'text-red-400/70 group-hover:text-red-300' : 'text-slate-400 dark:text-slate-500 group-hover:text-purple-400/70'}
-                                            `}>
-                                                {coupon.campaigns?.name}
-                                            </span>
+
+                                                <span className={`text-[9px] font-bold uppercase tracking-tighter text-center line-clamp-1 leading-none transition-colors mt-0.5
+                                                    ${isSelected
+                                                        ? isMeat ? 'text-red-200' : 'text-purple-200'
+                                                        : isMeat ? 'text-red-400/70 group-hover:text-red-300' : 'text-slate-400 dark:text-slate-500 group-hover:text-purple-400/70'}
+                                                `}>
+                                                    {partNum === 'BONUS' ? (language === 'ar' ? 'بونص' : 'BONUS') : (coupon.campaigns?.name || 'Package')}
+                                                </span>
+                                            </div>
 
                                             {!isSelected && <div className={`absolute inset-0 ${isMeatBundle ? 'bg-red-500/5' : 'bg-purple-500/5'} opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl`} />}
                                         </button>
