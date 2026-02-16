@@ -1,0 +1,129 @@
+{
+  "version": "1.0.0",
+  "schema": "2024-q1",
+  "company": {
+    "name": "أنتيجرافيتي",
+    "code": "ANTIGRAVITY",
+    "masterKey": "enterprise-secure-master-key-2024"
+  },
+  "terminals": [
+    {
+      "id": 15,
+      "name": "محطة المسح الرئيسية",
+      "type": "ACR122U",
+      "location": "الفرع الرئيسي",
+      "branch_id": 1,
+      "enabled": true,
+      "connectionUrl": "http://localhost:3000",
+      "secret": "terminal-secret-key-123456",
+      "lastSeen": "2026-01-29T00:00:00Z",
+      "status": "online",
+      "properties": {
+        "port": "COM3",
+        "baudRate": 115200,
+        "timeout": 5000,
+        "retryAttempts": 3
+      }
+    },
+    {
+      "id": 2,
+      "name": "محطة الدفع الثانوية",
+      "type": "ACR122U",
+      "location": "فرع الدعم",
+      "branch_id": 2,
+      "enabled": true,
+      "connectionUrl": "http://localhost:3001",
+      "secret": "terminal-secret-key-789012",
+      "lastSeen": "2026-01-29T00:00:00Z",
+      "status": "offline",
+      "properties": {
+        "port": "COM4",
+        "baudRate": 115200,
+        "timeout": 5000,
+        "retryAttempts": 3
+      }
+    }
+  ],
+  "devices": [
+    {
+      "deviceId": "device-001",
+      "label": "قارئ NFC (المدخل)",
+      "type": "HID",
+      "vendorId": "0x072F",
+      "productId": "0x2200",
+      "serialNumber": "ACR122U001",
+      "connected": true,
+      "firmwareVersion": "v2.2.1",
+      "assignedTerminal": 1,
+      "capabilities": [
+        "read",
+        "write",
+        "authenticate",
+        "encrypt"
+      ],
+      "encryptionType": "AES-128",
+      "maxRangeMeters": 0.1,
+      "operatingSystem": [
+        "Windows",
+        "Linux",
+        "macOS"
+      ]
+    },
+    {
+      "deviceId": "15",
+      "label": "قارئ NFC (الخروج)",
+      "type": "HID",
+      "vendorId": "0x072F",
+      "productId": "0x2200",
+      "serialNumber": "ACR122U002",
+      "connected": false,
+      "firmwareVersion": "v2.2.0",
+      "assignedTerminal": 2,
+      "capabilities": [
+        "read",
+        "write",
+        "authenticate"
+      ],
+      "encryptionType": "AES-128",
+      "maxRangeMeters": 0.1,
+      "operatingSystem": [
+        "Windows"
+      ]
+    }
+  ],
+  "security": {
+    "signatureAlgorithm": "HMAC-SHA256",
+    "encryptionAlgorithm": "AES-128-ECB",
+    "cardValidationRequired": true,
+    "companyTokenRequired": true,
+    "companyToken": "ANTIGRAVITY-SECURE-ID-2024"
+  },
+  "logging": {
+    "enabled": true,
+    "level": "INFO",
+    "logPath": "./logs/devices",
+    "maxFileSizeMB": 50,
+    "retentionDays": 30,
+    "logScanEvents": true,
+    "logConnectionEvents": true
+  },
+  "monitoring": {
+    "healthCheckInterval": 30000,
+    "inactivityTimeoutMs": 300000,
+    "enableRemoteMonitoring": true,
+    "alertOnDisconnect": true,
+    "alertOnError": true
+  },
+  "performance": {
+    "pollingIntervalMs": 100,
+    "maxConcurrentScans": 5,
+    "scanTimeoutMs": 5000,
+    "cacheDurationMs": 10000
+  },
+  "database": {
+    "syncInterval": 5000,
+    "retryInterval": 10000,
+    "maxRetries": 3,
+    "batchSize": 10
+  }
+}

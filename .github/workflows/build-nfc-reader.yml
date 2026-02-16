@@ -1,0 +1,46 @@
+name: Build NFC Reader
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # windows-latest: Windows x64
+        # macos-13: Intel Mac (x64)
+        # macos-14: Apple Silicon Mac (arm64)
+        os: [windows-latest, macos-13, macos-14]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js 18.x
+      uses: actions/setup-node@v4
+      with:
+        node-version: 18.x
+        cache: 'npm'
+        cache-dependency-path: nfc-reader-simple/package-lock.json
+
+    - name: Install Dependencies
+      working-directory: ./nfc-reader-simple
+      run: npm ci
+
+    - name: Build Secure Reader
+      working-directory: ./nfc-reader-simple
+      env:
+        # These secrets must be added in GitHub Repo Settings > Secrets
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        TERMINAL_ID: ${{ secrets.TERMINAL_ID }}
+      run: node build-reader.js
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: nfc-reader-${{ runner.os }}-${{ runner.arch }}
+        path: nfc-reader-simple/dist/*

@@ -1,0 +1,76 @@
+{
+  "name": "nfc-discount-frontend",
+  "version": "4.0.0-web-bridge",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "nfc": "node scripts/nfc-bridge-pkg.js",
+    "nfc-bridge": "node scripts/nfc-bridge-pkg.js",
+    "nfc-inject": "node scripts/init-card.js",
+    "device-info": "node scripts/device-info.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "dist:bridge": "npx esbuild scripts/nfc-bridge-pkg.js --bundle --platform=node --outfile=dist-final/index.js --external:nfc-pcsc --external:node-notifier --external:bindings",
+    "sea:prep": "node --experimental-sea-config sea-config.json",
+    "sea:win": "node -e \"require('fs').copyFileSync(process.execPath, 'dist-bin/nfc-scanner-win.exe')\" && npx postject dist-bin/nfc-scanner-win.exe NODE_SEA_BLOB sea-prep.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2",
+    "sea:mac": "npx postject dist-bin/nfc-bridge-mac NODE_SEA_BLOB sea-prep.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 --macho-segment-name NODE_SEA"
+  },
+  "dependencies": {
+    "@pokusew/pcsclite": "^0.6.0",
+    "@supabase/supabase-js": "^2.89.0",
+    "bcryptjs": "^3.0.3",
+    "chalk": "^5.6.2",
+    "date-fns": "^4.1.0",
+    "dotenv": "^17.2.3",
+    "jose": "^6.1.3",
+    "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^0.561.0",
+    "next": "^16.1.1-canary.10",
+    "nfc-pcsc": "^0.8.1",
+    "node-notifier": "^10.0.1",
+    "ora": "^9.1.0",
+    "otplib": "^12.0.1",
+    "qrcode": "^1.5.4",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "recharts": "^3.5.1",
+    "sonner": "^2.0.7",
+    "ws": "8.18.3",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.1",
+    "@yao-pkg/pkg": "^6.12.0",
+    "autoprefixer": "^10.4.22",
+    "babel-plugin-react-compiler": "1.0.0",
+    "boxen": "^8.0.1",
+    "cli-table3": "^0.6.5",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "eslint": "^9",
+    "eslint-config-next": "16.0.10",
+    "gradient-string": "^3.0.0",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "pkg": "^5.8.1",
+    "postject": "^1.0.0-alpha.6",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.19",
+    "wait-on": "^9.0.3"
+  },
+  "bin": "scripts/nfc-bridge-pkg.js",
+  "pkg": {
+    "scripts": [
+      "scripts/nfc-bridge-pkg.js"
+    ],
+    "assets": [
+      "node_modules/@pokusew/pcsclite/build/Release/pcsclite.node",
+      "node_modules/bindings/bindings.js"
+    ]
+  }
+}
