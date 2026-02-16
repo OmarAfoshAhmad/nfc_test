@@ -90,3 +90,9 @@ input[type=number] {
 .animate-flash-success {
     animation: flash-success 1s ease-in-out;
 }
+/* Horizontal Scrollbar Helpers */
+.custom-scrollbar-x::-webkit-scrollbar { height: 4px; }
+.custom-scrollbar-x::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar-x::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

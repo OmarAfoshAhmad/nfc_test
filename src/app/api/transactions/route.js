@@ -139,6 +139,8 @@ export async function POST(request) {
         }
         // 1.5 Validate & Apply Coupon (New Campaign Engine)
         else if (coupon_id) {
+            console.log(`[API /transactions] Attempting to use coupon: ${coupon_id} for customer: ${customer_id}`);
+
             const { data: coupon, error: couponErr } = await supabase
                 .from('customer_coupons')
                 .select('*, campaigns(*)')
@@ -148,14 +150,22 @@ export async function POST(request) {
                 .single();
 
             if (couponErr || !coupon) {
-                return NextResponse.json({ message: 'Coupon invalid, expired or not found' }, { status: 400 });
+                console.error('[API /transactions] Coupon fetch failed:', couponErr || 'Coupon not found/inactive');
+                return NextResponse.json({
+                    message: 'Coupon invalid, expired or not found',
+                    details: couponErr?.message || 'Check customer_id and status'
+                }, { status: 400 });
             }
 
             // Security Check: Enforce Expiration
             if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
+                console.warn(`[API /transactions] Coupon expired: ${coupon.expires_at}`);
                 // Auto-expire it in DB for cleanliness
                 await supabase.from('customer_coupons').update({ status: 'EXPIRED' }).eq('id', coupon_id);
-                return NextResponse.json({ message: 'This coupon has expired' }, { status: 400 });
+                return NextResponse.json({
+                    message: 'This coupon has expired',
+                    expired_at: coupon.expires_at
+                }, { status: 400 });
             }
 
             const reward = coupon.campaigns.reward_config;
@@ -372,6 +382,7 @@ export async function POST(request) {
                         .eq('customer_id', customer_id)
                         .eq('campaign_id', campaign_id)
                         .eq('status', 'ACTIVE')
+                        .gt('remaining_quota', 0) // Fix: Prevent blocking if quota is 0
                         .limit(1)
                         .maybeSingle();
 

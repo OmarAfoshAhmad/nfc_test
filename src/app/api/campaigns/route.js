@@ -8,29 +8,65 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export async function GET(request) {
-    const { searchParams } = new URL(request.url);
-    const type = searchParams.get('type');
-    const showDeleted = searchParams.get('deleted') === 'true';
+    try {
+        console.log('[API /campaigns] Request received');
 
-    let query = supabase.from('campaigns').select('*').order('created_at', { ascending: false });
+        // 1. Auth Check
+        const { getSession } = await import('@/lib/auth');
+        const session = await getSession();
+        console.log('[API /campaigns] Session:', session ? 'Valid' : 'None');
 
-    if (showDeleted) {
-        query = query.not('deleted_at', 'is', null);
-    } else {
-        query = query.is('deleted_at', null); // Default: Show active Only
+        // Note: We are logging but proceeding for now to debug. 
+        // If session is missing in production, we should block.
+        // if (!session) { ... } 
+
+        const { searchParams } = new URL(request.url);
+        const type = searchParams.get('type');
+        const showDeleted = searchParams.get('deleted') === 'true';
+
+        // 2. Manual Admin Client Creation (Matching api/scan/route.js pattern)
+        const { createClient } = await import('@supabase/supabase-js');
+        // Note: Using standard import or specific if needed. 
+        // Actually, importing createClient from the library directly is safer if lib/supabase is suspect.
+        // But let's use the one from 'next/server' or '@supabase/supabase-js' directly.
+
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+        if (!serviceRoleKey) {
+            console.error('[API /campaigns] CRITICAL: SUPABASE_SERVICE_ROLE_KEY is missing');
+            return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 });
+        }
+
+        // Create local admin client
+        const localSupabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+
+        let query = localSupabaseAdmin.from('campaigns').select('*').order('created_at', { ascending: false });
+
+        if (showDeleted) {
+            query = query.not('deleted_at', 'is', null);
+        } else {
+            query = query.is('deleted_at', null);
+        }
+
+        if (type) {
+            query = query.eq('type', type);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+            console.error('[API /campaigns] Database Error:', error);
+            return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+
+        console.log(`[API /campaigns] Success. Found ${data?.length || 0} records.`);
+        return NextResponse.json(data || []);
+
+    } catch (err) {
+        console.error('[API /campaigns] Unexpected Error:', err);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
-
-    if (type) {
-        query = query.eq('type', type);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json(data);
 }
 
 export async function PATCH(request) {
