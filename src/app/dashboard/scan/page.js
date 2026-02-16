@@ -1050,6 +1050,7 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
     const [amount, setAmount] = useState('');
     const [selectedCouponGroup, setSelectedCouponGroup] = useState(null); // CHANGED: Track selected group
     const [manualAmount, setManualAmount] = useState('');
+    const [showAmountAlert, setShowAmountAlert] = useState(false);
 
     // Top-up / Buy Package Modal
     const [showPartialPayment, setShowPartialPayment] = useState(false);
@@ -1357,6 +1358,12 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
 
     // Toggle Selection
     const handleSelectCoupon = (group) => {
+        // ✅ NEW: Prevent selection if bill amount is 0 or empty
+        if (!amount || parseFloat(amount) <= 0) {
+            setShowAmountAlert(true); // Show professional dialog instead of toast
+            return;
+        }
+
         if (selectedCouponGroup?.id === group.id) {
             setSelectedCouponGroup(null); // Deselect
         } else {
@@ -1366,6 +1373,27 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
 
     return (
         <div className="flex flex-col h-full relative">
+
+            {/* --- MISSING AMOUNT ALERT DIALOG --- */}
+            {showAmountAlert && (
+                <div className="absolute inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm rounded-3xl p-6 flex items-center justify-center animate-in fade-in duration-200">
+                    <div className="w-full max-w-sm bg-slate-900 border border-slate-700 rounded-3xl p-8 shadow-2xl text-center transform animate-in zoom-in-95 duration-200">
+                        <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <Zap size={32} className="text-red-500" />
+                        </div>
+                        <h3 className="text-xl font-bold text-white mb-2">{t('security_note_title') || 'تنبيه'}</h3>
+                        <p className="text-slate-400 mb-8 leading-relaxed">
+                            {t('enter_amount_first')}
+                        </p>
+                        <button
+                            onClick={() => setShowAmountAlert(false)}
+                            className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-4 rounded-2xl transition-all active:scale-95 shadow-lg shadow-red-500/20"
+                        >
+                            {t('confirm') || 'موافق'}
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* --- PARTIAL PAYMENT MODAL --- */}
             {showPartialPayment && (
