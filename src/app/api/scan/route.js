@@ -77,20 +77,23 @@ export async function POST(request) {
         }
 
         // 5. Get customer details
-        const { data: customer, error: customerError } = await supabaseAdmin
-            .from('customers')
-            .select('*')
-            .eq('id', card.customer_id)
-            .maybeSingle();
-
-        if (customerError || !customer) {
-            console.error('[API /scan] Customer not found for card:', uid);
-            return NextResponse.json({
-                status: 'error',
-                error: 'Customer not found',
-                card
-            }, { status: 404 });
+        let customer = null;
+        if (card.customer_id) {
+            const { data: custData, error: customerError } = await supabaseAdmin
+                .from('customers')
+                .select('*')
+                .eq('id', card.customer_id)
+                .maybeSingle();
+            customer = custData;
         }
+
+        if (!customer && card.customer_id) {
+            console.warn('[API /scan] Customer ID exists but customer not found for card:', uid);
+        }
+
+        // Check if customer is required for the specific scan page logic
+        // But the API itself should return the card status
+        const isLinked = !!customer;
 
         const now = new Date().toISOString();
 
@@ -107,17 +110,18 @@ export async function POST(request) {
             .select('*')
             .eq('is_active', true)
             .is('deleted_at', null)
-            .or(`customer_type.eq.ALL,customer_type.eq.${customer.type || 'single'},customer_type.is.null`);
+            .eq('customer_type', customer?.type || 'single');
 
         // 8. Return success response
-        console.log(`[API /scan] Success for UID: ${uid}, Customer: ${customer.full_name}`);
+        console.log(`[API /scan] Scan successful for UID: ${uid}${customer ? `, Customer: ${customer.full_name}` : ' (Unlinked)'}`);
         return NextResponse.json({
             status: 'success',
             card,
             customer,
             coupons: coupons || [],
             availableBundles: campaigns || [],
-            customerType: customer.type || 'single'
+            customerType: customer?.type || 'single',
+            isLinked
         });
 
     } catch (error) {
@@ -159,13 +163,13 @@ export async function GET(request) {
             .eq('status', 'ACTIVE');
 
         // 3. Get Available Campaigns/Bundles
-        // Filter by customer type (Single/Family) or ALL
+        // Filter by customer type (Single/Family)
         const { data: campaigns, error: campaignsError } = await supabaseAdmin
             .from('campaigns')
             .select('*')
             .eq('is_active', true)
             .is('deleted_at', null)
-            .or(`customer_type.eq.ALL,customer_type.eq.${customer.type || 'single'}`);
+            .eq('customer_type', customer?.type || 'single');
 
         return NextResponse.json({
             customer,

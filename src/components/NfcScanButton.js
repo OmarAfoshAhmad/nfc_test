@@ -56,7 +56,7 @@ export default function NfcScanButton({ onScan, className = "" }) {
 
         setIsScanning(true);
 
-        // Timeout handling
+        // Timeout handling - increased to 30s for remote scanners
         setTimeout(() => {
             setIsScanning(isScanningNow => {
                 if (isScanningNow) {
@@ -66,7 +66,7 @@ export default function NfcScanButton({ onScan, className = "" }) {
                 }
                 return isScanningNow;
             });
-        }, 15000); // 15s timeout
+        }, 30000); // 30s timeout
     };
 
     if (isScanning) {

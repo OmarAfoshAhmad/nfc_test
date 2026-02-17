@@ -97,8 +97,8 @@ export class NfcReader {
 
                     console.log("Feature Report UID:", uid);
 
-                    // Validate UID (should be 8-20 chars, not error code like 9000 or 6300)
-                    if (uid && uid.length >= 8 && uid.length <= 20 && uid !== '9000' && uid !== '6300') {
+                    // Validate UID (should be 4-64 chars, not error code like 9000 or 6300)
+                    if (uid && uid.length >= 4 && uid.length <= 128 && uid !== '9000' && uid !== '6300') {
                         if (uid !== lastUid) {
                             lastUid = uid;
                             if (this.onScan) this.onScan(uid);

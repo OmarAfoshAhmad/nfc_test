@@ -13,9 +13,13 @@ export function NFCProvider({ children }) {
     const [hwReader, setHwReader] = useState(null);
     const [isHwConnected, setIsHwConnected] = useState(false);
     const [mounted, setMounted] = useState(false);
+    const [selectedTerminalId, setSelectedTerminalId] = useState(null);
+    const terminalIdRef = useRef(null);
 
     // Callbacks ref needs to be accessible by hardware listener
     const scanCallbacksRef = useRef([]);
+    const lastProcessedUidRef = useRef(null);
+    const lastProcessedTimeRef = useRef(0);
 
     // Hardware Reader Logic
     const connectHwReader = async () => {
@@ -33,6 +37,17 @@ export function NFCProvider({ children }) {
             reader.onScan = (uid) => {
                 // Ensure UID is standardized
                 const formattedUid = uid.toUpperCase();
+
+                // Client-side de-duplication
+                const now = Date.now();
+                if (formattedUid === lastProcessedUidRef.current && (now - lastProcessedTimeRef.current < 1500)) {
+                    console.log('🛡️ [NFCContext] Blocking Duplicate HW Scan:', formattedUid);
+                    return;
+                }
+
+                lastProcessedUidRef.current = formattedUid;
+                lastProcessedTimeRef.current = now;
+
                 console.log('⚡ [HW] Fast Scan:', formattedUid);
                 toast.success('Card Scanned (Local)');
 
@@ -96,28 +111,43 @@ export function NFCProvider({ children }) {
         };
     }, [hwReader]);
 
-    // Existing Cloud Logic (unchanged but shortened for context)
+    const fetchInitialStatus = useCallback(async (tid) => {
+        const id = tid || terminalIdRef.current;
+        if (!id) return;
+        try {
+            const { data } = await supabase.from('terminals').select('*').eq('id', id).maybeSingle();
+            if (data) setTerminalInfo(data);
+        } catch (err) {
+            console.error('Fetch Status Error:', err);
+        }
+    }, []);
+
     useEffect(() => {
-        // Only run on client side
         if (typeof window === 'undefined') return;
 
-        // ... (Existing implementation for Terminal selection & Supabase Realtime)
-        // إذا لم يتم تحديد terminal، استخدم الافتراضي (1)
-        const storedTerminalId = localStorage.getItem('selected_terminal');
-        const terminalId = storedTerminalId || '1';
-        if (!storedTerminalId) {
+        const tid = localStorage.getItem('selected_terminal') || '1';
+        setSelectedTerminalId(tid);
+        terminalIdRef.current = tid;
+        setMounted(true);
+    }, []);
+
+    // Monitoring Effect - Re-runs if terminalId changes
+    useEffect(() => {
+        // Only run on client side
+        if (typeof window === 'undefined' || !selectedTerminalId) return;
+
+        const terminalId = selectedTerminalId;
+        terminalIdRef.current = terminalId;
+
+        // If terminalId changes, ensure localStorage is updated
+        if (localStorage.getItem('selected_terminal') !== terminalId) {
             localStorage.setItem('selected_terminal', terminalId);
         }
-        if (!terminalId) return;
 
         console.log('📡 Starting NFC Context Monitoring for Terminal:', terminalId);
 
         // Initial Fetch
-        const fetchInitialStatus = async () => {
-            const { data } = await supabase.from('terminals').select('*').eq('id', terminalId).single();
-            if (data) setTerminalInfo(data);
-        };
-        fetchInitialStatus();
+        fetchInitialStatus(terminalId);
 
         // Subscribe to scan events - ONLY INSERT (new scans), not UPDATE (removals)
         const scanChannel = supabase
@@ -127,7 +157,29 @@ export function NFCProvider({ children }) {
                 { event: 'INSERT', schema: 'public', table: 'scan_events', filter: `terminal_id=eq.${terminalId}` },
                 (payload) => {
                     // Only process new card scans (INSERT), ignore updates (removals)
-                    console.log('🎴 New Scan Event:', payload.new?.uid);
+                    const newUid = payload.new?.uid;
+                    if (!newUid) return;
+
+                    // Client-side de-duplication (1.5s window for same UID)
+                    const now = Date.now();
+                    if (newUid === lastProcessedUidRef.current && (now - lastProcessedTimeRef.current < 1500)) {
+                        console.log('🛡️ [NFCContext] Blocking Duplicate RT Scan:', newUid);
+                        return;
+                    }
+
+                    lastProcessedUidRef.current = newUid;
+                    lastProcessedTimeRef.current = now;
+
+                    console.log('🎴 New Scan Event:', newUid);
+
+                    // Mark as processed immediately to prevent poll duplication
+                    if (payload.new?.id) {
+                        supabase.from('scan_events').update({ processed: true }).eq('id', payload.new.id)
+                            .then(({ error }) => {
+                                if (error) console.error('[NFCContext] Error marking processed:', error);
+                            });
+                    }
+
                     scanCallbacksRef.current.forEach(cb => {
                         cb({ ...payload.new, type: 'scan', eventType: payload.eventType, source: 'cloud' });
                     });
@@ -147,17 +199,66 @@ export function NFCProvider({ children }) {
             )
             .subscribe();
 
-        // Refresh timer
-        const interval = setInterval(() => {
+        // Refresh timer for terminal status
+        const statusInterval = setInterval(() => {
             setLastRefresh(Date.now());
-            fetchInitialStatus();
+            fetchInitialStatus(terminalId);
         }, 5000);
 
-        setMounted(true);
+        // Polling Fallback for Scans (Backup for WebSocket)
+        const scanPollInterval = setInterval(async () => {
+            if (!terminalId) return;
+
+            try {
+                // Fetch the latest unprocessed scan event for this terminal
+                const { data } = await supabase
+                    .from('scan_events')
+                    .select('*')
+                    .eq('terminal_id', terminalId)
+                    .eq('processed', false)
+                    .eq('status', 'PRESENT')
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                if (data && data.uid) {
+                    // Time filter: ignore events older than 15 seconds
+                    const eventTime = new Date(data.created_at).getTime();
+                    const now = Date.now();
+
+                    if (now - eventTime < 15000) {
+                        // Client-side de-duplication
+                        if (data.uid === lastProcessedUidRef.current && (now - lastProcessedTimeRef.current < 1500)) {
+                            // Still mark as processed even if we block the callback
+                            await supabase.from('scan_events').update({ processed: true }).eq('id', data.id);
+                            return;
+                        }
+
+                        console.log('📡 [Poll] Missed Scan recovered:', data.uid);
+
+                        lastProcessedUidRef.current = data.uid;
+                        lastProcessedTimeRef.current = now;
+
+                        // Mark as processed in DB immediately
+                        await supabase.from('scan_events').update({ processed: true }).eq('id', data.id);
+
+                        // Trigger callbacks
+                        scanCallbacksRef.current.forEach(cb => {
+                            cb({ ...data, type: 'scan', source: 'poll' });
+                        });
+                    } else {
+                        // Mark stale event as processed
+                        await supabase.from('scan_events').update({ processed: true }).eq('id', data.id);
+                    }
+                }
+            } catch (err) {
+                console.error('NFC Polling Error:', err);
+            }
+        }, 3000); // Check every 3s
 
         const handleStorageChange = (e) => {
-            if (e.key === 'selected_terminal') {
-                window.location.reload();
+            if (e.key === 'selected_terminal' && e.newValue !== selectedTerminalId) {
+                setSelectedTerminalId(e.newValue);
             }
         };
         window.addEventListener('storage', handleStorageChange);
@@ -165,10 +266,11 @@ export function NFCProvider({ children }) {
         return () => {
             supabase.removeChannel(scanChannel);
             supabase.removeChannel(statusChannel);
-            clearInterval(interval);
+            clearInterval(statusInterval);
+            clearInterval(scanPollInterval);
             window.removeEventListener('storage', handleStorageChange);
         };
-    }, []);
+    }, [selectedTerminalId, fetchInitialStatus]);
 
     // Derived State
     const lastSync = terminalInfo?.last_sync ? new Date(terminalInfo.last_sync) : null;
@@ -195,41 +297,59 @@ export function NFCProvider({ children }) {
         isHwConnected,
         isCloudConnected,
         readerName: readerName,
+        terminalId: selectedTerminalId,
+        setTerminalId: setSelectedTerminalId,
         connectHwReader, // New export
         onScan,
-        injectCard: async (uid) => {
-            // ... (keep existing implementation)
-            const terminalId = typeof window !== 'undefined' ? localStorage.getItem('selected_terminal') : null;
-            /* ... */
-            // Keep the function logic as is, or use simplified version below if too long
-            // For safety, I'll return the existing logic from previous view if I can, but I'm rewriting the Provider.
-            // I'll assume I need to rewrite the body of injectCard.
-            if (!terminalId) {
+        injectCard: async (uid, terminalIdOverride) => {
+            const finalTerminalId = terminalIdOverride || selectedTerminalId;
+            if (!finalTerminalId) {
                 toast.error('Terminal ID not selected.');
                 throw new Error('No terminal selected');
             }
+
             try {
+                // 1. Ensure card is enrolled in DB (Generates signature record)
+                const enrollRes = await fetch('/api/cards/enroll', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uid })
+                });
+
+                const enrollData = await enrollRes.json();
+
+                if (!enrollRes.ok) {
+                    console.warn('Enrollment pre-check warning:', enrollData);
+                    throw new Error(enrollData.message || 'Failed to enroll/verify card');
+                }
+
+                // 2. Send WRITE_SIGNATURE command to terminal
                 const res = await fetch('/api/terminals/actions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action_type: 'WRITE_SIGNATURE',
-                        terminal_id: terminalId,
+                        terminal_id: finalTerminalId,
                         payload: { uid }
                     })
                 });
+
                 if (!res.ok) {
                     const err = await res.json();
                     throw new Error(err.message || 'Failed to send command');
                 }
+
                 toast.success('Security Injection Command Sent');
+
+                // Return the enrolled card data to update UI immediately
+                return enrollData.data || enrollData;
             } catch (e) {
-                console.error(e);
+                console.error('Injection Error:', e);
                 toast.error(`Injection Failed: ${e.message}`);
                 throw e;
             }
         }
-    }), [isConnected, isHwConnected, isCloudConnected, readerName, onScan]); // Dependencies for useMemo
+    }), [isConnected, isHwConnected, isCloudConnected, readerName, onScan, selectedTerminalId]); // Dependencies for useMemo
 
     return (
         <NFCContext.Provider value={value}>

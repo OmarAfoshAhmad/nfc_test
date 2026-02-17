@@ -349,81 +349,6 @@ export default function ScanPage() {
         };
     }, [selectedTerminal, retryKey]);
 
-    // Polling Fallback (Backup for WebSocket)
-    useEffect(() => {
-        if (!selectedTerminal) return;
-
-        const pollInterval = setInterval(async () => {
-            // Only poll if we are not already processing something AND NOT using Electron
-            if (status === 'processing' || processingRef.current || isElectron) return;
-
-            try {
-                // Fetch the latest unprocessed scan event for this terminal
-                // IMPORTANT: Only fetch events with status='PRESENT' to avoid showing removed cards
-                // ✅ NOW INCLUDING METADATA FOR SECURITY CHECK
-                const { data, error } = await supabase
-                    .from('scan_events')
-                    .select('id, uid, created_at, status, metadata')
-                    .eq('terminal_id', selectedTerminal)
-                    .eq('processed', false)
-                    .eq('status', 'PRESENT')  // Only get cards that are still present
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-
-                if (data && data.uid && isMounted.current) {
-                    console.log('[Polling] Detected unprocessed event:', data);
-
-                    // --- TIME FILTER (Polling) ---
-                    const eventTime = new Date(data.created_at).getTime();
-                    const now = Date.now();
-                    if (now - eventTime > 15000) { // Slightly looser for polling (15s)
-                        console.warn(`[Polling] IGNORED STALE EVENT: ${data.uid}`);
-                        // Mark as processed so we don't see it again
-                        await supabase.from('scan_events').update({ processed: true }).eq('id', data.id);
-                        return;
-                    }
-
-                    // ✅ SECURITY CHECK: Verify card is signed (unsigned cards prohibited)
-                    const metadata = typeof data.metadata === 'string'
-                        ? JSON.parse(data.metadata)
-                        : (data.metadata || { secured: false });
-
-                    if (!metadata.secured) {
-                        console.log(`[Polling] ⚠️ UNSIGNED CARD DETECTED: ${data.uid} - skipping processing`);
-                        toast.error(t('card_unsupported') || 'This card is not supported');
-                        playSound('error');
-                        setFlashEffect('error');
-                        setTimeout(() => setFlashEffect(null), 1000);
-                        // Mark as processed to prevent repeated attempts
-                        await supabase.from('scan_events').update({ processed: true }).eq('id', data.id);
-                        return; // ⛔ STOP - unsigned card rejected
-                    }
-
-                    // If we already have a different card, clear it first
-                    if (scanResult && scanResult.card && scanResult.card.uid !== data.uid) {
-                        console.log(`[Polling] Different card detected. Clearing previous: ${scanResult.card.uid}`);
-                        resetScan();
-                    }
-
-                    // Double check busy state before proceeding
-                    if (processingRef.current) return;
-
-                    // Mark as processed immediately to prevent duplicate processing
-                    await supabase
-                        .from('scan_events')
-                        .update({ processed: true })
-                        .eq('id', data.id);
-
-                    processScan(data.uid);
-                }
-            } catch (err) {
-                console.error('[Polling] Error:', err);
-            }
-        }, 5000); // Poll every 5 seconds
-
-        return () => clearInterval(pollInterval);
-    }, [selectedTerminal, status]);
 
     // Keyboard Shortcuts (Enter to confirm, Escape to cancel)
     useEffect(() => {
@@ -598,7 +523,8 @@ export default function ScanPage() {
                 setScanResult(data);
 
                 if (data.status === 'success') {
-                    toast.success(`${t('connected')}: ${data.customer.full_name}`);
+                    const customerName = data.customer?.full_name || t('unlinked_card') || 'Card Unlinked';
+                    toast.success(`${t('connected')}: ${customerName}`);
                     playSound('success');
                     setFlashEffect('success');
                 } else {
@@ -609,18 +535,10 @@ export default function ScanPage() {
 
             // Auto-clear flash
             setTimeout(() => setFlashEffect(null), 1000);
-        } catch (err) {
-            console.error('[processScan] FATAL ERROR:', err);
-            toast.error(t('network_error'));
-            playSound('error');
-            setFlashEffect('error');
-            setTimeout(() => setFlashEffect(null), 1000);
-
-            // Release lock on error since no result modal is shown
-            processingRef.current = false;
         } finally {
             console.log('[processScan] FINISHED. Status reset to connected.');
             setStatus('connected');
+            processingRef.current = false;
         }
     };
 
@@ -910,7 +828,9 @@ export default function ScanPage() {
                                         </div>
                                         <div className="flex flex-col">
                                             <div className="flex items-center gap-3 mb-1">
-                                                <h3 className="text-xl font-black text-gray-900 dark:text-white leading-none">{scanResult.customer.full_name}</h3>
+                                                <h3 className="text-xl font-black text-gray-900 dark:text-white leading-none">
+                                                    {scanResult.customer?.full_name || t('unlinked_card') || 'Card Unlinked'}
+                                                </h3>
                                                 <button
                                                     onClick={() => setShowDangerZone(!showDangerZone)}
                                                     className={`p-1 rounded-lg transition-colors ${showDangerZone ? 'bg-red-500/10 text-red-500' : 'text-slate-400 hover:text-red-500 hover:bg-red-500/5'}`}
@@ -936,7 +856,7 @@ export default function ScanPage() {
                                                         {scanResult.customerType === 'family' ? (t('customer_family') || 'عائلة') : (t('customer_single') || 'عازب')}
                                                     </span>
                                                     <span className="text-[10px] font-bold opacity-70">
-                                                        ({scanResult.customer.effectiveDiscount}% {t('discount') || 'خصم'})
+                                                        ({scanResult.customer?.effectiveDiscount || 0}% {t('discount') || 'خصم'})
                                                     </span>
                                                 </div>
 
@@ -986,26 +906,48 @@ export default function ScanPage() {
 
                                 {/* Content - Scrollable if needed */}
                                 <div className="flex-1 p-5 overflow-y-auto min-h-0">
-                                    <CheckoutForm
-                                        customer={scanResult.customer}
-                                        card={scanResult.card}
-                                        rewards={scanResult.availableRewards}
-                                        coupons={scanResult.coupons}
-                                        manualCampaigns={scanResult.manualCampaigns}
-                                        campaignProgress={scanResult.campaignProgress}
-                                        availableBundles={scanResult.availableBundles}
-                                        currency={pageSettings.currency_symbol}
-                                        onComplete={resetScan}
-                                        onRefresh={refreshData}
-                                        onGrantSuccess={(newCoupon) => {
-                                            toast.success('Reward Granted!');
-                                            refreshData();
-                                        }}
-                                        playSound={playSound}
-                                        setFlashEffect={setFlashEffect}
-                                        loading={loading}
-                                        setLoading={setLoading}
-                                    />
+                                    {scanResult.isLinked ? (
+                                        <CheckoutForm
+                                            customer={scanResult.customer}
+                                            card={scanResult.card}
+                                            rewards={scanResult.availableRewards}
+                                            coupons={scanResult.coupons}
+                                            manualCampaigns={scanResult.manualCampaigns}
+                                            campaignProgress={scanResult.campaignProgress}
+                                            availableBundles={scanResult.availableBundles}
+                                            currency={pageSettings.currency_symbol}
+                                            onComplete={resetScan}
+                                            onRefresh={refreshData}
+                                            onGrantSuccess={(newCoupon) => {
+                                                if (newCoupon) {
+                                                    setScanResult(prev => ({
+                                                        ...prev,
+                                                        coupons: [newCoupon, ...(prev.coupons || [])]
+                                                    }));
+                                                }
+                                            }}
+                                            playSound={playSound}
+                                            setFlashEffect={setFlashEffect}
+                                            loading={loading}
+                                            setLoading={setLoading}
+                                        />
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center h-full text-center space-y-6 animate-in fade-in slide-in-from-bottom-5">
+                                            <div className="w-24 h-24 bg-amber-500/10 rounded-full flex items-center justify-center text-amber-500 border border-amber-500/30">
+                                                <UserPlus size={48} />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-2xl font-black text-white mb-2">{t('unlinked_card') || 'البطاقة غير مرتبطة بعميل'}</h3>
+                                                <p className="text-slate-400 max-w-sm mx-auto">{t('unlinked_card_desc') || 'هذه البطاقة مسجلة في النظام كبطاقة مؤمنة ولكن لم يتم ربطها بأي عميل حتى الآن. يرجى تسجيل عميل جديد لاستخدامها.'}</p>
+                                            </div>
+                                            <button
+                                                onClick={() => router.push(`/dashboard/customers?uid=${scanResult.card.uid}`)}
+                                                className="px-8 py-4 bg-amber-500 hover:bg-amber-600 text-slate-900 rounded-2xl font-black text-lg transition-all active:scale-95 shadow-xl shadow-amber-500/20"
+                                            >
+                                                {t('register_new_customer') || 'تسجيل عميل جديد'}
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ) : (

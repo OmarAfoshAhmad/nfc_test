@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Building2, Zap, Trash2, Edit, Key, Monitor, Users, MapPin, RefreshCw, Eye, EyeOff, ShieldCheck, Lock } from 'lucide-react';
+import { Plus, Building2, Zap, Trash2, Edit, Key, Monitor, Users, MapPin, RefreshCw, Eye, EyeOff, ShieldCheck, Lock, Activity, Shield, CreditCard, ShieldAlert, Loader2, XCircle, Info, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLanguage } from '@/lib/LanguageContext';
 import { useNFC } from '@/lib/NFCContext';
@@ -915,224 +915,332 @@ function UserManagement() {
 }
 
 function NFCSecurityManagement() {
-    const { t, language } = useLanguage();
-    const { isConnected, onScan: subscribeToScan, injectCard, readerName } = useNFC();
+    const { t } = useLanguage();
+    const {
+        isConnected,
+        isCloudConnected,
+        isHwConnected,
+        onScan: subscribeToScan,
+        injectCard,
+        readerName,
+        terminalId: activeTerminalId,
+        setTerminalId
+    } = useNFC();
+
     const [card, setCard] = useState(null);
     const [isInjecting, setIsInjecting] = useState(false);
-    const [showSuccess, setShowSuccess] = useState(false);
+    const [terminals, setTerminals] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [loadingTerminals, setLoadingTerminals] = useState(false);
+
+    // Fetch terminals for selection
+    useEffect(() => {
+        const fetchTerminals = async () => {
+            setLoadingTerminals(true);
+            try {
+                const { data } = await supabase
+                    .from('terminals')
+                    .select('id, name, last_sync, metadata')
+                    .order('name');
+                setTerminals(data || []);
+            } catch (err) {
+                console.error('Error fetching terminals:', err);
+            } finally {
+                setLoadingTerminals(false);
+            }
+        };
+        fetchTerminals();
+    }, []);
 
     useEffect(() => {
-        if (!isConnected) return;
-
+        // We always want to listen if possible, but we filter or highlight if it's the active terminal
         const unsubscribe = subscribeToScan(async (data) => {
-            // Handle card removal
-            if (data.status === 'REMOVED') {
+            if (!data.uid) {
                 setCard(null);
-                setIsInjecting(false);
-                setShowSuccess(false);
                 return;
             }
 
-            // Fetch latest card data from source of truth (cards table)
-            // This prevents desync if the card was revoked in DB but still has physical signature
             try {
-                const { data: dbCard } = await supabase
+                const { data: cardData } = await supabase
                     .from('cards')
-                    .select('*')
+                    .select('*, customers(full_name)')
                     .eq('uid', data.uid.toUpperCase())
-                    .is('deleted_at', null)
                     .maybeSingle();
 
-                const mergedCard = dbCard ? {
-                    ...data,
-                    metadata: {
-                        ...data.metadata,
-                        ...dbCard.metadata,
-                        secured: dbCard.metadata?.secured || false
-                    }
-                } : data;
+                const mergedCard = {
+                    uid: data.uid,
+                    terminal_id: data.terminal_id, // Important for routing
+                    source: data.source,
+                    dbRecord: cardData,
+                    metadata: typeof cardData?.metadata === 'string'
+                        ? JSON.parse(cardData.metadata)
+                        : (cardData?.metadata || {}),
+                    customer: cardData?.customers
+                };
 
                 setCard(mergedCard);
-
-                // Auto-detect success if we were injecting and card became secured
-                if (isInjecting && mergedCard.metadata?.secured) {
-                    setIsInjecting(false);
-                    setShowSuccess(true);
-                }
-            } catch (err) {
-                console.error('Error fetching card details:', err);
-                setCard(data); // Fallback
+            } catch (e) {
+                console.error('Scan process error:', e);
             }
         });
 
         return () => unsubscribe();
-    }, [isConnected, subscribeToScan, isInjecting]);
+    }, [subscribeToScan, card]);
 
     const handleInject = async () => {
         if (!card?.uid || isInjecting) return;
 
         setIsInjecting(true);
-
         try {
-            // We use the context method which sends the command
-            injectCard(card.uid);
+            // Priority 2: Actively selected terminal in context
+            const targetTerminalId = card.terminal_id || activeTerminalId;
 
-            // Fallback timeout in case we don't get the update (e.g. bridge stuck)
-            setTimeout(() => {
-                setIsInjecting(false);
-            }, 10000); // 10s timeout
+            // Optional: Check if target terminal is online
+            const targetTerm = terminals.find(t => t.id.toString() === targetTerminalId?.toString());
+            if (targetTerm && getTerminalStatus(targetTerm) === 'offline') {
+                toast.warning(t('terminal_offline_warning') || 'الجهاز المختار غير متصل حالياً. قد لا يتم كتابة التوقيع على البطاقة مادياً، ولكن سيتم تحديث حالة الأمان في النظام.');
+            }
+
+            const updatedData = await injectCard(card.uid, targetTerminalId);
+
+            // Update local state immediately so UI reflects "Secured" status
+            if (updatedData) {
+                const newMetadata = typeof updatedData.metadata === 'string' ? JSON.parse(updatedData.metadata) : (updatedData.metadata || {});
+
+                setCard(prev => ({
+                    ...prev,
+                    dbRecord: updatedData,
+                    metadata: newMetadata
+                }));
+
+                // If the card is now secured, finish the loading state
+                if (newMetadata.secured) {
+                    setIsInjecting(false);
+                }
+            }
+
+            // Important: Even if writing to terminal fails or is pending, 
+            // the database record is updated.
+            toast.success(t('injection_db_updated') || 'تم تحديث أمان البطاقة في النظام بنجاح.');
 
         } catch (e) {
             setIsInjecting(false);
-            toast.error(t('network_error'));
+            console.error('Injection handling error:', e);
+            toast.error(t('injection_error') || `فشل الحقن: ${e.message}`);
         }
     };
 
     const handleRevoke = async () => {
-        if (!card?.uid || !confirm(t('confirm_revoke_signature') || 'Are you sure?')) return;
+        if (!card?.uid || isInjecting) return;
 
-        const toastId = toast.loading(t('revoking_signature') || 'جاري إلغاء التوقيع...');
+        if (!confirm(t('confirm_revoke_security') || 'هل أنت متأكد من إبطال التوقيع الأمني لهذه البطاقة؟')) return;
+
+        setLoading(true);
         try {
             const res = await fetch('/api/cards/revoke-signature', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ uid: card.uid })
             });
+
             const data = await res.json();
+
             if (res.ok) {
-                toast.success(t('revoke_signature_success'), { id: toastId });
-                // Update local state immediately for instant feedback
-                setCard(prev => prev ? ({
-                    ...prev,
-                    metadata: {
-                        ...prev.metadata,
-                        secured: false,
-                        signature_valid: false
-                    }
-                }) : null);
+                const updatedCard = data.card;
+                // Update local state immediately so UI reflects "Unsecured" status
+                if (updatedCard) {
+                    setCard(prev => ({
+                        ...prev,
+                        dbRecord: updatedCard,
+                        metadata: typeof updatedCard.metadata === 'string' ? JSON.parse(updatedCard.metadata) : (updatedCard.metadata || {})
+                    }));
+                }
+                toast.success(t('revoke_success') || 'تم إبطال التوقيع الأمني بنجاح');
             } else {
-                toast.error(data.message || t('revoke_signature_failed'), { id: toastId });
+                throw new Error(data.message || 'Failed to revoke security');
             }
-        } catch (err) {
-            toast.error(t('network_error'), { id: toastId });
+        } catch (e) {
+            console.error('Revoke Error:', e);
+            toast.error(e.message || t('network_error'));
+        } finally {
+            setLoading(false);
         }
     };
 
+    // Terminal status helper
+    const getTerminalStatus = (term) => {
+        if (!term.last_sync) return 'offline';
+        const isOnline = (Date.now() - new Date(term.last_sync).getTime()) < 60000;
+        return isOnline ? 'online' : 'offline';
+    };
+
+    // Card's terminal name
+    const cardTerminalName = card?.terminal_id
+        ? terminals.find(t => t.id.toString() === card.terminal_id.toString())?.name
+        : null;
+
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Status Card */}
-                <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-xl overflow-hidden relative">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -mr-16 -mt-16 blur-3xl" />
-                    <h3 className="text-xl font-black mb-6 text-gray-800 dark:text-white flex items-center gap-3">
-                        <Key size={24} className="text-blue-500" />
-                        {t('card_initialization') || 'تهيئة البطاقات الجديدة'}
-                    </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Status Column */}
+                <div className="md:col-span-1 space-y-6">
+                    <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="font-bold flex items-center gap-2">
+                                <Activity className="w-5 h-5 text-primary" />
+                                {t('system_status') || 'حالة النظام'}
+                            </h3>
+                            <div className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${isConnected ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                {isConnected ? (t('online') || 'متصل') : (t('offline') || 'غير متصل')}
+                            </div>
+                        </div>
 
-                    {!isConnected ? (
-                        <div className="p-6 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-700/30 rounded-2xl text-amber-700 dark:text-amber-400 text-sm">
-                            <p className="font-bold mb-2">⚠️ {t('reader_disconnected') || 'القارئ غير متصل'}</p>
-                            <p>{t('bridge_required_desc') || 'يرجى تشغيل برنامج الجسر المحلي (NFC Bridge) وتوصيل القارئ لتفعيل هذه الميزة.'}</p>
+                        <div className="space-y-4 pt-2">
+                            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-2xl">
+                                <span className="text-xs text-muted-foreground">{t('active_reader') || 'القارئ النشط'}</span>
+                                <span className="text-xs font-bold truncate max-w-[120px]">{readerName}</span>
+                            </div>
+
+                            {/* Terminal Selector */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">
+                                    {t('monitor_terminal') || 'تتبع جهاز محدد (عن بعد)'}
+                                </label>
+                                <select
+                                    value={activeTerminalId || ''}
+                                    onChange={(e) => setTerminalId(e.target.value)}
+                                    className="w-full p-3 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl text-xs font-bold outline-none focus:ring-2 ring-primary/20"
+                                >
+                                    {terminals.map(term => (
+                                        <option key={term.id} value={term.id}>
+                                            {term.name} ({getTerminalStatus(term) === 'online' ? '✅' : '❌'})
+                                        </option>
+                                    ))}
+                                    {terminals.length === 0 && <option value="">{t('loading') || 'جاري التحميل...'}</option>}
+                                </select>
+                            </div>
+
+                            {!isConnected && (
+                                <div className="p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-700/30 rounded-2xl text-amber-700 dark:text-amber-400 text-[11px] leading-relaxed">
+                                    <p className="font-bold mb-1">⚠️ {t('reader_disconnected_short') || 'لا يوجد قارئ نشط'}</p>
+                                    <p>{t('bridge_remote_note') || 'تأكد من تشغيل الجسر المحلي أو اختيار جهاز "أونلاين" من القائمة أعلاه.'}</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="bg-gradient-to-br from-primary to-blue-600 rounded-3xl p-6 shadow-lg text-white space-y-4">
+                        <Shield className="w-10 h-10 opacity-50" />
+                        <div>
+                            <h3 className="font-bold text-lg">{t('security_center') || 'مركز الأمان'}</h3>
+                            <p className="text-white/70 text-xs">
+                                {t('security_desc') || 'أدوات تشفير وتأمين البطاقات المادية لضمان عدم التلاعب برصيد المشتركين.'}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Card Info Column */}
+                <div className="md:col-span-2 space-y-6">
+                    {!card ? (
+                        <div className="bg-white dark:bg-gray-800 rounded-3xl p-12 shadow-sm border border-dashed flex flex-col items-center justify-center text-center space-y-4">
+                            <div className="w-20 h-20 bg-gray-50 dark:bg-gray-900 rounded-full flex items-center justify-center animate-pulse">
+                                <CreditCard className="w-10 h-10 text-gray-300" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-lg text-gray-400">{t('place_card') || 'يرجى وضع البطاقة على القارئ'}</h3>
+                                <p className="text-gray-400 text-sm">{t('waiting_for_scan') || 'في انتظار عملية المسح...'}</p>
+                            </div>
                         </div>
                     ) : (
-                        <div className="space-y-6">
-                            <div className={`p-8 rounded-3xl border-2 border-dashed flex flex-col items-center justify-center transition-all duration-500 ${card ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/10 dark:border-blue-500/30' : 'bg-gray-50 border-gray-200 dark:bg-gray-900/50 dark:border-gray-700'}`}>
-                                {!card ? (
-                                    <>
-                                        <div className="w-16 h-16 bg-white dark:bg-gray-800 rounded-2xl flex items-center justify-center shadow-lg mb-4 animate-pulse">
-                                            <RefreshCw size={32} className="text-gray-300" />
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <div className="bg-white dark:bg-gray-800 rounded-3xl overflow-hidden shadow-sm border">
+                                <div className="p-1 bg-gradient-to-r from-primary/20 via-blue-500/20 to-primary/20" />
+                                <div className="p-8 space-y-8">
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${card.metadata?.secured ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                                {card.metadata?.secured ? <ShieldCheck className="w-8 h-8" /> : <ShieldAlert className="w-8 h-8" />}
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground mb-1">
+                                                    {t('detected_card') || 'تم اكتشاف بطاقة'}
+                                                </p>
+                                                <h3 className="text-2xl font-mono font-bold tracking-tighter">
+                                                    {card.uid}
+                                                </h3>
+                                            </div>
                                         </div>
-                                        <p className="text-gray-500 dark:text-gray-400 font-bold">{t('place_card_on_reader') || 'ضع البطاقة على القارئ الآن...'}</p>
-                                    </>
-                                ) : (
-                                    <>
-                                        <div className="w-16 h-16 bg-blue-500 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-500/30 mb-4 animate-bounce">
-                                            <Zap size={32} className="text-white fill-current" />
-                                        </div>
-                                        <p className="text-xs uppercase tracking-[0.3em] font-black text-blue-500 mb-1 leading-none">{t('card_detected') || 'تم اكتشاف بطاقة'}</p>
-                                        <p className="text-3xl font-black text-gray-900 dark:text-white font-mono tracking-tighter mb-4">{card.uid}</p>
-
-                                        <div className={`flex items-center gap-2 mb-6 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${card.metadata?.secured ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20'}`}>
-                                            <div className={`w-2 h-2 rounded-full ${card.metadata?.secured ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
-                                            {card.metadata?.secured ? (t('card_already_secured') || 'بطاقة مؤمنة مسبقاً') : (t('card_unsecured') || 'بطاقة غير مهيئة')}
-                                        </div>
-
-                                        <div className="flex gap-3 w-full">
-                                            <button
-                                                onClick={handleInject}
-                                                disabled={isInjecting || card.metadata?.secured}
-                                                className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-2xl font-black text-lg shadow-xl shadow-blue-600/20 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
-                                            >
-                                                {isInjecting ? <Loader2 className="animate-spin mx-auto" /> : (t('inject_signature_btn') || 'بدء عملية الحقن الأمني')}
-                                            </button>
-
-                                            {card.metadata?.secured && (
-                                                <button
-                                                    onClick={handleRevoke}
-                                                    className="px-6 bg-purple-600 hover:bg-purple-500 text-white py-4 rounded-2xl font-black text-lg shadow-xl shadow-purple-600/20 transition-all active:scale-95"
-                                                    title={t('revoke_signature_btn')}
-                                                >
-                                                    <Lock size={24} />
-                                                </button>
+                                        <div className="text-right">
+                                            <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${card.metadata?.secured ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-red-100 text-red-600 border border-red-200'}`}>
+                                                <div className={`w-1.5 h-1.5 rounded-full ${card.metadata?.secured ? 'bg-green-600' : 'bg-red-600'} animate-pulse`} />
+                                                {card.metadata?.secured ? (t('secured_card') || 'بطاقة مؤمنة') : (t('unsecured_card') || 'بطاقة غير مهيئة')}
+                                            </div>
+                                            {cardTerminalName && (
+                                                <p className="mt-2 text-[10px] text-muted-foreground font-bold">
+                                                    📍 {cardTerminalName}
+                                                </p>
                                             )}
                                         </div>
-                                    </>
-                                )}
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-700/50">
+                                            <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">{t('customer_name') || 'اسم العميل'}</p>
+                                            <p className="font-bold text-sm">{card.customer?.full_name || t('unlinked_card') || 'بطاقة غير مرتبطة'}</p>
+                                        </div>
+                                        <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-700/50">
+                                            <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">{t('scan_source') || 'مصدر المسح'}</p>
+                                            <p className="font-bold text-sm uppercase">{card.source || 'Local HID'}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-4 flex flex-col sm:flex-row gap-3">
+                                        {!card.metadata?.secured ? (
+                                            <button
+                                                onClick={handleInject}
+                                                disabled={isInjecting}
+                                                className="flex-1 py-4 bg-primary text-white font-black rounded-2xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 flex items-center justify-center gap-3 group"
+                                            >
+                                                {isInjecting ? (
+                                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                                ) : (
+                                                    <Key className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+                                                )}
+                                                <span>{isInjecting ? (t('injecting') || 'جاري الحقن الأمني...') : (t('start_injection') || 'بدء الحقن الأمني')}</span>
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={handleRevoke}
+                                                className="flex-1 py-4 bg-red-50 text-red-600 border border-red-100 font-black rounded-2xl hover:bg-red-100 transition-all flex items-center justify-center gap-3 group"
+                                            >
+                                                <XCircle className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                                <span>{t('revoke_security') || 'إبطال التوقيع الأمني'}</span>
+                                            </button>
+                                        )
+                                        }
+                                        <button
+                                            onClick={() => setCard(null)}
+                                            className="px-8 py-4 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-bold rounded-2xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
+                                        >
+                                            {t('dismiss') || 'إغلاق'}
+                                        </button>
+                                    </div>
+
+                                    {isInjecting && (
+                                        <div className="p-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-700/30 rounded-2xl flex items-start gap-3">
+                                            <Info className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+                                            <p className="text-xs text-blue-700 dark:text-blue-400 leading-relaxed font-medium">
+                                                {t('injection_process_desc') || 'جاري إرسال مفاتيح التشفير للبطاقة المتصلة بالقارئ. يرجى عدم تحريك البطاقة حتى انتهاء العملية.'}
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}
                 </div>
-
-                {/* Instructions Card */}
-                <div className="bg-gray-50 dark:bg-gray-900/50 p-8 rounded-3xl border border-gray-100 dark:border-gray-800">
-                    <h3 className="text-lg font-black mb-4 text-gray-800 dark:text-white">{t('security_instructions') || 'تعليمات الأمان'}</h3>
-                    <ul className="space-y-4">
-                        {[
-                            { title: 'AES-128', desc: 'يتم تشفير البيانات باستخدام خوارزمية AES-128 العالمية.' },
-                            { title: 'Sector Locking', desc: 'بعد الحقن، يتم قفل القطاع الأمني بحيث لا يمكن قراءته إلا بواسطة هذا التطبيق.' },
-                            { title: 'UID Dependency', desc: 'كل توقيع مرتبط برقم البطاقة الفريد (UID) لضمان عدم إمكانية نسخ التوقيع.' },
-                            { title: 'One-Time Initialization', desc: 'تحتاج للقيام بهذه العملية مرة واحدة فقط قبل تسليم البطاقة للعميل.' }
-                        ].map((item, i) => (
-                            <li key={i} className="flex gap-4">
-                                <div className="h-6 w-6 rounded-lg bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 flex items-center justify-center text-[10px] font-black text-blue-500 flex-shrink-0">
-                                    {i + 1}
-                                </div>
-                                <div>
-                                    <p className="font-bold text-sm text-gray-700 dark:text-gray-200">{item.title}</p>
-                                    <p className="text-xs text-gray-400 mt-1 leading-relaxed">{item.desc}</p>
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
             </div>
-
-            {/* Success Modal */}
-            {showSuccess && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
-                    <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 w-full max-w-sm text-center relative overflow-hidden animate-in zoom-in-50 duration-500 border-2 border-emerald-500/20">
-                        <div className="absolute inset-0 bg-emerald-500/5" />
-                        <div className="relative">
-                            <div className="w-24 h-24 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
-                                <ShieldCheck size={48} className="text-emerald-500 animate-in zoom-in spin-in-12 duration-700" />
-                            </div>
-                            <h2 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mb-2">{t('injection_success_title') || 'تم الحقن بنجاح'}</h2>
-                            <p className="text-gray-500 font-bold dark:text-gray-300 mb-8">{t('injection_success_msg') || 'تم تأمين البطاقة وتوقيعها بنجاح'}</p>
-
-                            <button
-                                onClick={() => setShowSuccess(false)}
-                                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-emerald-600/20 transition-all active:scale-95"
-                            >
-                                {t('close')}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
-}
-
-function Loader2({ className, size = 24 }) {
-    return <RefreshCw className={`animate-spin ${className}`} size={size} />;
 }

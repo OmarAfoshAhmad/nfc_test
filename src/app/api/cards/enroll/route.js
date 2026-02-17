@@ -60,9 +60,15 @@ export async function POST(request) {
         let cardResult;
 
         if (existingCard) {
+            // Merge metadata
+            const oldMetadata = typeof existingCard.metadata === 'string'
+                ? JSON.parse(existingCard.metadata)
+                : (existingCard.metadata || {});
+
             // Update existing card
             const updates = {
                 signature,
+                metadata: { ...oldMetadata, secured: true }, // Mark as secured/signed without losing other data
                 enrolled_at: new Date().toISOString(),
                 enrolled_by: userId,
                 is_active: true,
@@ -91,6 +97,7 @@ export async function POST(request) {
                     uid,
                     customer_id: validCustomerId, // Use the validated ID (or null)
                     signature,
+                    metadata: { secured: true }, // Mark as secured/signed
                     enrolled_at: new Date().toISOString(),
                     enrolled_by: userId,
                     is_active: true,
@@ -113,12 +120,7 @@ export async function POST(request) {
             req: request
         });
 
-        return successResponse({
-            uid,
-            signature,
-            success: true,
-            message: 'Card enrolled successfully'
-        });
+        return successResponse(cardResult, 200, 'Card enrolled successfully');
 
     } catch (error) {
         console.error('Enrollment API Error:', error);
