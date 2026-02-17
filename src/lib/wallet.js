@@ -17,6 +17,11 @@ export async function getBalance(customerId) {
 }
 
 export async function logWalletAction({ customer_id, amount, type, reason, transaction_id, admin_id }) {
+    // CRITICAL SAFETY GUARD: Prevent bulk updates if customer_id is missing
+    if (!customer_id) {
+        throw new Error('CRITICAL: logWalletAction called without customer_id. Operation aborted to protect data integrity.');
+    }
+
     // 1. Log to ledger
     const { error: ledgerError } = await supabase
         .from('balance_ledger')

@@ -98,11 +98,14 @@ export async function POST(request) {
         const now = new Date().toISOString();
 
         // 6. Active Coupons (Include those with NO expiration date)
-        const { data: coupons, error: couponsError } = await supabaseAdmin
-            .from('customer_coupons')
-            .select('*, campaigns(*)')
-            .or(`status.eq.ACTIVE,status.eq.active`)
-            .or(`expires_at.is.null,expires_at.gt.${now}`);
+        const { data: coupons, error: couponsError } = customer
+            ? await supabaseAdmin
+                .from('customer_coupons')
+                .select('*, campaigns(*)')
+                .eq('customer_id', customer.id) // ✅ FILTER BY CUSTOMER ID
+                .or(`status.eq.ACTIVE,status.eq.active`)
+                .or(`expires_at.is.null,expires_at.gt.${now}`)
+            : { data: [], error: null };
 
         // 7. Get available campaigns filtered by customer type
         const { data: campaigns, error: campaignsError } = await supabaseAdmin
@@ -158,9 +161,10 @@ export async function GET(request) {
         // 2. Get Active Quotas (Coupons)
         const { data: activeQuotas, error: quotasError } = await supabaseAdmin
             .from('customer_coupons')
-            .select('*')
-            .eq('customer_id', customer_id)
-            .eq('status', 'ACTIVE');
+            .select('*, campaigns(*)')
+            .eq('customer_id', customer_id) // ✅ FILTER BY CUSTOMER ID
+            .or(`status.eq.ACTIVE,status.eq.active`)
+
 
         // 3. Get Available Campaigns/Bundles
         // Filter by customer type (Single/Family)

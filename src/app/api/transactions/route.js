@@ -102,6 +102,14 @@ export async function POST(request) {
             is_topup = false
         } = body;
 
+        // CRITICAL SECURITY FIX: Validate customer_id
+        if (!customer_id || customer_id === 'undefined' || customer_id === 'null') {
+            return NextResponse.json({
+                message: 'Customer ID is required for this operation',
+                code: 'MISSING_CUSTOMER_ID'
+            }, { status: 400 });
+        }
+
         // --- Wallet Top-up Handler ---
         if (is_topup) {
             const { topUp } = await import('@/lib/wallet');

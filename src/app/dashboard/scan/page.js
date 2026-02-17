@@ -1444,37 +1444,51 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                         </div>
 
                         {availableBundles && availableBundles.length > 0 ? (
-                            availableBundles.map(bundle => (
-                                <button
-                                    key={bundle.id}
-                                    disabled={loading}
-                                    onClick={() => handleBuyPackage(bundle)}
-                                    className="group relative bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 hover:border-blue-500 p-4 rounded-2xl text-start transition-all hover:scale-[1.02] shadow-xl h-full flex flex-col justify-between"
-                                >
-                                    <div className="absolute top-2 right-2 bg-blue-500/10 text-blue-400 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
-                                        1 {t('credit_unit')}
-                                    </div>
-                                    <div>
-                                        <h3 className="text-sm font-bold text-white group-hover:text-blue-400 mb-2 line-clamp-1">{bundle.name}</h3>
-                                        <div className="flex flex-col gap-0.5">
-                                            <div className="flex items-baseline gap-1">
-                                                <span className="text-3xl font-black text-white">{bundle.reward_config?.value || 0}%</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="mt-3 flex flex-col gap-1.5">
-                                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                                            <CheckCircle2 size={10} className="text-emerald-500" />
-                                            <span>{bundle.validity_days} {t('days_label')}</span>
-                                        </div>
-                                        {bundle.reward_config?.type === 'PERCENTAGE' && (
-                                            <div className="bg-amber-500/10 text-amber-500 text-[9px] font-black px-2 py-0.5 rounded-lg border border-amber-500/20 w-fit">
-                                                4 {t('coupons') || 'كوبونات'}
+                            availableBundles.map(bundle => {
+                                const isOwned = coupons?.some(c => c.campaign_id === bundle.id && c.status === 'ACTIVE');
+                                return (
+                                    <button
+                                        key={bundle.id}
+                                        disabled={loading || isOwned}
+                                        onClick={() => !isOwned && handleBuyPackage(bundle)}
+                                        className={`group relative border p-4 rounded-2xl text-start transition-all shadow-xl h-full flex flex-col justify-between ${isOwned
+                                                ? 'bg-slate-900/40 border-slate-800 opacity-60 cursor-not-allowed'
+                                                : 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 hover:border-blue-500 hover:scale-[1.02]'
+                                            }`}
+                                    >
+                                        {isOwned && (
+                                            <div className="absolute inset-0 flex items-center justify-center bg-slate-950/60 rounded-2xl z-20 backdrop-blur-[1px]">
+                                                <div className="bg-emerald-500/20 text-emerald-500 border border-emerald-500/50 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-1 shadow-lg shadow-emerald-500/10">
+                                                    <CheckCircle2 size={12} strokeWidth={3} />
+                                                    <span>{t('active') || 'Active'}</span>
+                                                </div>
                                             </div>
                                         )}
-                                    </div>
-                                </button>
-                            ))
+                                        <div className="absolute top-2 right-2 bg-blue-500/10 text-blue-400 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider z-10">
+                                            1 {t('credit_unit')}
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-bold text-white group-hover:text-blue-400 mb-2 line-clamp-1">{bundle.name}</h3>
+                                            <div className="flex flex-col gap-0.5">
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className="text-3xl font-black text-white">{bundle.reward_config?.value || 0}%</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="mt-3 flex flex-col gap-1.5">
+                                            <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                                                <CheckCircle2 size={10} className="text-emerald-500" />
+                                                <span>{bundle.validity_days} {t('days_label')}</span>
+                                            </div>
+                                            {bundle.reward_config?.type === 'PERCENTAGE' && (
+                                                <div className="bg-amber-500/10 text-amber-500 text-[9px] font-black px-2 py-0.5 rounded-lg border border-amber-500/20 w-fit">
+                                                    4 {t('coupons') || 'كوبونات'}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </button>
+                                );
+                            })
                         ) : (
                             <div className="col-span-full flex flex-col items-center justify-center py-12 text-slate-500">
                                 <Store size={48} className="mb-4 opacity-50" />
