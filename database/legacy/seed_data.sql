@@ -18,8 +18,7 @@ INSERT INTO discounts (name, type, value, points_required, description) VALUES
 
 -- Seed Branches
 INSERT INTO branches (name, location) VALUES 
-('الفرع الرئيسي', 'الرياض'),
-('فرع جدة', 'جدة');
+('الفرع الرئيسي', 'المانيا'),
 
 -- Seed Terminals
 INSERT INTO terminals (branch_id, name, connection_url) VALUES 

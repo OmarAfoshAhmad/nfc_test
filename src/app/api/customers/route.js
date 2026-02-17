@@ -172,6 +172,7 @@ export async function POST(request) {
 
 export async function PATCH(request) {
     try {
+        const session = await getSession();
         if (!session || session.role !== 'admin') {
             return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
         }

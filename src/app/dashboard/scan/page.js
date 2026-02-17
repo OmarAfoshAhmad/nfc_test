@@ -1048,11 +1048,17 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
             // FIXED 
             discountAmount = parseFloat(discountValue || 0);
         }
-        // Cap discount at bill amount (can't be negative)
-        if (discountAmount > billAmount) discountAmount = billAmount;
-
-        finalTotal = Math.max(0, billAmount - discountAmount);
+    } else {
+        // APPLY MEMBERSHIP DISCOUNT AUTOMATICALLY
+        const memberDiscount = customer?.effectiveDiscount || 0;
+        if (memberDiscount > 0) {
+            discountAmount = billAmount * (memberDiscount / 100);
+        }
     }
+
+    // Cap discount at bill amount (can't be negative)
+    if (discountAmount > billAmount) discountAmount = billAmount;
+    finalTotal = Math.max(0, billAmount - discountAmount);
 
     // Purchase Package Logic
     const handleBuyPackage = async (bundle) => {
@@ -1452,8 +1458,8 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                                         disabled={loading || isOwned}
                                         onClick={() => !isOwned && handleBuyPackage(bundle)}
                                         className={`group relative border p-4 rounded-2xl text-start transition-all shadow-xl h-full flex flex-col justify-between ${isOwned
-                                                ? 'bg-slate-900/40 border-slate-800 opacity-60 cursor-not-allowed'
-                                                : 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 hover:border-blue-500 hover:scale-[1.02]'
+                                            ? 'bg-slate-900/40 border-slate-800 opacity-60 cursor-not-allowed'
+                                            : 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 hover:border-blue-500 hover:scale-[1.02]'
                                             }`}
                                     >
                                         {isOwned && (

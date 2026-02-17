@@ -113,14 +113,24 @@ export async function POST(request) {
             .select('*')
             .eq('is_active', true)
             .is('deleted_at', null)
-            .eq('customer_type', customer?.type || 'single');
+            .or(`customer_type.is.null,customer_type.eq.${customer?.type || 'single'}`);
+
+        // 7.5 Calculate effective member discount
+        let effectiveDiscount = 0;
+        if (customer) {
+            if (customer.discount_percent !== null) {
+                effectiveDiscount = parseFloat(customer.discount_percent);
+            } else {
+                effectiveDiscount = customer.type === 'family' ? 25 : 12;
+            }
+        }
 
         // 8. Return success response
-        console.log(`[API /scan] Scan successful for UID: ${uid}${customer ? `, Customer: ${customer.full_name}` : ' (Unlinked)'}`);
+        console.log(`[API /scan] Scan successful for UID: ${uid}${customer ? `, Customer: ${customer.full_name}, Discount: ${effectiveDiscount}%` : ' (Unlinked)'}`);
         return NextResponse.json({
             status: 'success',
             card,
-            customer,
+            customer: customer ? { ...customer, effectiveDiscount } : null,
             coupons: coupons || [],
             availableBundles: campaigns || [],
             customerType: customer?.type || 'single',

@@ -30,7 +30,7 @@ export default function Home() {
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75"></span>
             <span className="relative inline-flex h-2 w-2 rounded-full bg-indigo-500"></span>
           </span>
-          v1.1 Now Available
+          V1.0 Now Available
         </div>
 
         <h1 className="max-w-4xl text-5xl font-extrabold tracking-tight sm:text-7xl">
@@ -47,7 +47,7 @@ export default function Home() {
             Get Started
           </Link>
           <Link href="/login" className="flex items-center justify-center gap-2 rounded-full border border-white/10 bg-white/5 px-8 py-3.5 text-base font-medium text-white backdrop-blur-sm transition hover:bg-white/10">
-            Admin Login
+            Login
           </Link>
         </div>
 

@@ -55,9 +55,9 @@ BEGIN
     
     -- وإلا استخدم الافتراضي حسب النوع
     IF v_type = 'family' THEN
-        RETURN 20.00;
+        RETURN 25.00;
     ELSE
-        RETURN 10.00;
+        RETURN 12.00;
     END IF;
 END;
 $$ LANGUAGE plpgsql;

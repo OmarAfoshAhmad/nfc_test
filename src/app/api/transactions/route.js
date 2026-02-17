@@ -207,6 +207,22 @@ export async function POST(request) {
             }
         }
 
+        // 2.5 Apply Membership Discount (if no coupon or instant discount used)
+        if (!discount_id && !coupon_id && manVal === 0 && customer_id) {
+            const { data: cust } = await supabaseAdmin.from('customers').select('*').eq('id', customer_id).single();
+            if (cust) {
+                let memberDiscount = cust.discount_percent !== null
+                    ? parseFloat(cust.discount_percent)
+                    : (cust.type === 'family' ? 25 : 12);
+
+                if (memberDiscount > 0) {
+                    amount_after = amount_after - (amount_after * (memberDiscount / 100));
+                    applied_discount_name = `خصم عضوية ${cust.type === 'family' ? 'العائلة' : 'الأفراد'} (${memberDiscount}%)`;
+                    console.log(`[API /transactions] Applied Membership Discount: ${memberDiscount}%`);
+                }
+            }
+        }
+
         if (amount_after < 0) amount_after = 0;
 
         // --- Wallet Payment Handler ---
@@ -390,7 +406,6 @@ export async function POST(request) {
                         .eq('customer_id', customer_id)
                         .eq('campaign_id', campaign_id)
                         .eq('status', 'ACTIVE')
-                        .gt('remaining_quota', 0) // Fix: Prevent blocking if quota is 0
                         .limit(1)
                         .maybeSingle();
 
@@ -428,7 +443,7 @@ export async function POST(request) {
                             return { splits: [2.5, 2.5], bonusBundle: 5, label: 'لحمة أفراد' };
                         }
                         if (type === 'individual') {
-                            return { splits: [2, 2, 3, 3], bonusBundle: 10, label: 'أفراد' };
+                            return { splits: [3, 3, 3, 3], bonusBundle: 12, label: 'أفراد' };
                         }
 
                         // Fallback: analyze campaign name for backward compatibility
@@ -446,7 +461,7 @@ export async function POST(request) {
                             return { splits: [2.5, 2.5], bonusBundle: 5, label: 'لحمة أفراد' };
                         }
                         if (lowerName.includes('افراد') || lowerName.includes('أفراد') || lowerName.includes('فرد')) {
-                            return { splits: [2, 2, 3, 3], bonusBundle: 10, label: 'أفراد' };
+                            return { splits: [3, 3, 3, 3], bonusBundle: 12, label: 'أفراد' };
                         }
 
                         // Default: Split total into 4 equal parts + bonus bundle

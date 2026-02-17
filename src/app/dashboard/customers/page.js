@@ -333,7 +333,7 @@ function CustomersContent() {
                                     >
                                         <span className="text-lg">👤</span>
                                         <span className="text-xs">{t('customer_single') || 'عازب'}</span>
-                                        <span className="text-[10px] opacity-60">10% {t('discount') || 'خصم'}</span>
+                                        <span className="text-[10px] opacity-60">12% {t('discount') || 'خصم'}</span>
                                     </button>
                                     <button
                                         type="button"
@@ -345,7 +345,7 @@ function CustomersContent() {
                                     >
                                         <span className="text-lg">👨‍👩‍👧‍👦</span>
                                         <span className="text-xs">{t('customer_family') || 'عائلة'}</span>
-                                        <span className="text-[10px] opacity-60">20% {t('discount') || 'خصم'}</span>
+                                        <span className="text-[10px] opacity-60">25% {t('discount') || 'خصم'}</span>
                                     </button>
                                 </div>
                             </div>
