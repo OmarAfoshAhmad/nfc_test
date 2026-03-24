@@ -13,6 +13,7 @@ jobs:
   build:
     name: Build ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
+    environment: SUPABASE_URL
     strategy:
       fail-fast: false
       matrix:
@@ -40,9 +41,9 @@ jobs:
       - name: Validate required secrets
         shell: bash
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL != '' && secrets.SUPABASE_URL || secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY != '' && secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_SERVICE_KEY }}
-          YAMEN_SECRET: ${{ secrets.YAMEN_SECRET != '' && secrets.YAMEN_SECRET || secrets.NFC_SIGNATURE_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL || secrets.NEXT_PUBLIC_SUPABASE_URL || vars.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || vars.SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_SERVICE_KEY || vars.SUPABASE_SERVICE_KEY }}
+          YAMEN_SECRET: ${{ secrets.YAMEN_SECRET || vars.YAMEN_SECRET || secrets.NFC_SIGNATURE_SECRET || vars.NFC_SIGNATURE_SECRET }}
         run: |
           set -euo pipefail
           missing=()
@@ -50,7 +51,7 @@ jobs:
           [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ] || missing+=("SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SERVICE_KEY)")
           [ -n "${YAMEN_SECRET:-}" ] || missing+=("YAMEN_SECRET (or NFC_SIGNATURE_SECRET)")
           if [ ${#missing[@]} -gt 0 ]; then
-            echo "Missing required secrets: ${missing[*]}"
+            echo "Missing required credentials (Secrets/Variables): ${missing[*]}"
             exit 1
           fi
 
@@ -59,9 +60,9 @@ jobs:
 
       - name: Build executable
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL != '' && secrets.SUPABASE_URL || secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY != '' && secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_SERVICE_KEY }}
-          YAMEN_SECRET: ${{ secrets.YAMEN_SECRET != '' && secrets.YAMEN_SECRET || secrets.NFC_SIGNATURE_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL || secrets.NEXT_PUBLIC_SUPABASE_URL || vars.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || vars.SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_SERVICE_KEY || vars.SUPABASE_SERVICE_KEY }}
+          YAMEN_SECRET: ${{ secrets.YAMEN_SECRET || vars.YAMEN_SECRET || secrets.NFC_SIGNATURE_SECRET || vars.NFC_SIGNATURE_SECRET }}
         run: node scripts/build-bridge.mjs --target ${{ matrix.target }}
 
       - name: Upload executable artifact
