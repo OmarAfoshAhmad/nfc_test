@@ -22,34 +22,17 @@ export async function logWalletAction({ customer_id, amount, type, reason, trans
         throw new Error('CRITICAL: logWalletAction called without customer_id. Operation aborted to protect data integrity.');
     }
 
-    // 1. Log to ledger
-    const { error: ledgerError } = await supabase
-        .from('balance_ledger')
-        .insert([{
-            customer_id,
-            amount,
-            type,
-            reason,
-            transaction_id: transaction_id || null,
-            admin_id: admin_id || null
-        }]);
+    const { data, error } = await supabase.rpc('wallet_apply_delta', {
+        p_customer_id: customer_id,
+        p_amount: amount,
+        p_type: type,
+        p_reason: reason || null,
+        p_transaction_id: transaction_id || null,
+        p_admin_id: admin_id || null
+    });
 
-    if (ledgerError) throw ledgerError;
-
-    // 2. Update customer aggregate balance
-    // Note: In a production environment, we'd use a Postgres Function (RPC) 
-    // to ensure this is atomic. For now, we update the balance field.
-    const currentBalance = await getBalance(customer_id);
-    const newBalance = parseFloat(currentBalance) + parseFloat(amount);
-
-    const { error: updateError } = await supabase
-        .from('customers')
-        .update({ balance: newBalance })
-        .eq('id', customer_id);
-
-    if (updateError) throw updateError;
-
-    return newBalance;
+    if (error) throw error;
+    return parseFloat(data || 0);
 }
 
 export async function topUp(customerId, amount, adminId, reason = 'Wallet Top-up') {

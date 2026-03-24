@@ -43,7 +43,6 @@ export default function ScanPage() {
 
     useEffect(() => {
         // Reset lock on mount
-        console.log('[ScanPage] Mounted. Resetting processingRef.');
         processingRef.current = false;
 
         // Initial status = listening to NFCContext
@@ -92,11 +91,7 @@ export default function ScanPage() {
 
     // Monitor Realtime Connection Status from NFCContext
     useEffect(() => {
-        console.log('[ScanPage] NFCContext Connection Status:', isConnected);
-        // If NFCContext is connected, AND a terminal is selected, keep status as connected
-        // If a terminal is NOT selected, don't override with connected
         if (isConnected && selectedTerminal) {
-            console.log('[ScanPage] NFCContext connected + Terminal selected → Status: connected');
             setStatus('connected');
         }
     }, [isConnected, selectedTerminal]);
@@ -105,13 +100,11 @@ export default function ScanPage() {
     useEffect(() => {
         const unsubscribe = subscribeToScan((data) => {
             if (data.uid) {
-                console.log('[ScanPage] Scan Received from NFCContext:', data.uid);
                 processScan(data.uid);
             }
         });
 
         return () => {
-            console.log('[ScanPage] Unsubscribing from NFC scans');
             unsubscribe();
         };
     }, [subscribeToScan]);
@@ -1048,12 +1041,6 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
             // FIXED 
             discountAmount = parseFloat(discountValue || 0);
         }
-    } else {
-        // APPLY MEMBERSHIP DISCOUNT AUTOMATICALLY
-        const memberDiscount = customer?.effectiveDiscount || 0;
-        if (memberDiscount > 0) {
-            discountAmount = billAmount * (memberDiscount / 100);
-        }
     }
 
     // Cap discount at bill amount (can't be negative)
@@ -1062,9 +1049,7 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
 
     // Purchase Package Logic
     const handleBuyPackage = async (bundle) => {
-        const confirmMsg = t('purchase_confirm')
-            .replace('{name}', bundle.name)
-            .replace('{price}', `${currency}${bundle.price}`);
+        const confirmMsg = t('confirm_add_package') || 'هل توافق على إضافة الباقة؟';
 
         if (!confirm(confirmMsg)) return;
 

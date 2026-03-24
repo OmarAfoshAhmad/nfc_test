@@ -41,14 +41,11 @@ export function NFCProvider({ children }) {
                 // Client-side de-duplication
                 const now = Date.now();
                 if (formattedUid === lastProcessedUidRef.current && (now - lastProcessedTimeRef.current < 1500)) {
-                    console.log('🛡️ [NFCContext] Blocking Duplicate HW Scan:', formattedUid);
                     return;
                 }
 
                 lastProcessedUidRef.current = formattedUid;
                 lastProcessedTimeRef.current = now;
-
-                console.log('⚡ [HW] Fast Scan:', formattedUid);
                 toast.success('Card Scanned (Local)');
 
                 // Simulate event for listeners
@@ -64,7 +61,6 @@ export function NFCProvider({ children }) {
             };
 
             reader.onCardRemoved = () => {
-                console.log('⚡ [HW] Card Removed');
                 // toast.info('Card Removed');
                 scanCallbacksRef.current.forEach(cb => {
                     cb({
@@ -78,7 +74,6 @@ export function NFCProvider({ children }) {
             };
 
             reader.onStatusChange = (status, msg) => {
-                console.log(`[HW] Status: ${status} - ${msg}`);
                 if (status === 'connected') {
                     setIsHwConnected(true);
                     toast.success(`Reader Connected: ${msg.split(':')[1] || 'USB'}`);
@@ -139,12 +134,9 @@ export function NFCProvider({ children }) {
         const terminalId = selectedTerminalId;
         terminalIdRef.current = terminalId;
 
-        // If terminalId changes, ensure localStorage is updated
         if (localStorage.getItem('selected_terminal') !== terminalId) {
             localStorage.setItem('selected_terminal', terminalId);
         }
-
-        console.log('📡 Starting NFC Context Monitoring for Terminal:', terminalId);
 
         // Initial Fetch
         fetchInitialStatus(terminalId);
@@ -163,14 +155,11 @@ export function NFCProvider({ children }) {
                     // Client-side de-duplication (1.5s window for same UID)
                     const now = Date.now();
                     if (newUid === lastProcessedUidRef.current && (now - lastProcessedTimeRef.current < 1500)) {
-                        console.log('🛡️ [NFCContext] Blocking Duplicate RT Scan:', newUid);
                         return;
                     }
 
                     lastProcessedUidRef.current = newUid;
                     lastProcessedTimeRef.current = now;
-
-                    console.log('🎴 New Scan Event:', newUid);
 
                     // Mark as processed immediately to prevent poll duplication
                     if (payload.new?.id) {
@@ -233,8 +222,6 @@ export function NFCProvider({ children }) {
                             await supabase.from('scan_events').update({ processed: true }).eq('id', data.id);
                             return;
                         }
-
-                        console.log('📡 [Poll] Missed Scan recovered:', data.uid);
 
                         lastProcessedUidRef.current = data.uid;
                         lastProcessedTimeRef.current = now;

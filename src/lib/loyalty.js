@@ -38,14 +38,19 @@ export async function getSystemSettings() {
 }
 
 /**
- * calculatePoints - Removed
+ * Calculate loyalty points for a given purchase amount
+ * @param {number} amount - Purchase amount
+ * @returns {Promise<number>} Points earned
  */
-export async function calculatePoints() {
-    return 0;
+export async function calculatePoints(amount) {
+    const settings = await cache.getOrSet(CacheKeys.SETTINGS, async () => ({ points_ratio: 10 }));
+    const ratio = parseFloat(settings?.points_ratio);
+    if (!ratio || ratio <= 0) return 0;
+    return Math.floor(amount / ratio);
 }
 
 /**
- * logPoints - Removed
+ * logPoints - Log points transaction
  */
 export async function logPoints() {
     return;

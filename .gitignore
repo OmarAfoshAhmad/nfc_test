@@ -49,3 +49,6 @@ dist-reader/
 
 # NFC Bridge credentials — contains service role key and YAMEN secret
 bridge-config.json
+
+# Local backup archives
+backups/

@@ -31,7 +31,7 @@ class DeviceManager extends EventEmitter {
         return {
             info: (msg, data = {}) => {
                 const timestamp = new Date().toISOString();
-                console.log(`[${timestamp}] [INFO] ${msg}`, data);
+                // log handled by custom logger if needed
                 this._writeToLogFile(`INFO: ${msg} ${JSON.stringify(data)}`);
             },
             error: (msg, error = {}) => {
@@ -188,9 +188,9 @@ class DeviceManager extends EventEmitter {
             timestamp: device.lastHeartbeat
         });
 
-        this.logger.info(`🔄 تحديث حالة الجهاز: ${deviceId}`, { 
-            status, 
-            device: device.label 
+        this.logger.info(`🔄 تحديث حالة الجهاز: ${deviceId}`, {
+            status,
+            device: device.label
         });
 
         return true;
@@ -207,7 +207,7 @@ class DeviceManager extends EventEmitter {
         }
 
         device.scansCount++;
-        
+
         const terminal = this.terminals.get(terminalId);
         if (terminal) {
             terminal.scansCount = (terminal.scansCount || 0) + 1;

@@ -51,13 +51,13 @@ export default function CardsPage() {
         setLoading(true);
         try {
             const [cardsRes, customersRes] = await Promise.all([
-                fetch(`/api/cards?deleted=${showDeleted}`),
+                fetch(`/api/cards?deleted=${showDeleted}&page=1&limit=100`),
                 fetch('/api/customers')
             ]);
             const cardsData = await cardsRes.json();
             const customersData = await customersRes.json();
 
-            setCards(cardsData.data || []);
+            setCards(cardsData.data?.rows || cardsData.data || []);
             setCustomers(customersData.data || []);
         } catch (e) {
             toast.error(t('error_loading'));

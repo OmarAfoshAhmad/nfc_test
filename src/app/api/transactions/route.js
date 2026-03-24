@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth';
 import { rateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimit';
 import { successResponse, handleApiError } from '@/lib/errorHandler';
 import { enforceMaintenance } from '@/lib/maintenance';
+import { getSystemSettings } from '@/lib/loyalty';
 
 export async function GET(request) {
     const session = await getSession();
@@ -147,8 +148,6 @@ export async function POST(request) {
         }
         // 1.5 Validate & Apply Coupon (New Campaign Engine)
         else if (coupon_id) {
-            console.log(`[API /transactions] Attempting to use coupon: ${coupon_id} for customer: ${customer_id}`);
-
             const { data: coupon, error: couponErr } = await supabase
                 .from('customer_coupons')
                 .select('*, campaigns(*)')
@@ -207,8 +206,11 @@ export async function POST(request) {
             }
         }
 
-        // 2.5 Apply Membership Discount (if no coupon or instant discount used)
-        if (!discount_id && !coupon_id && manVal === 0 && customer_id) {
+        // 2.5 Apply Membership Discount (admin-controlled system setting)
+        const systemSettings = await getSystemSettings();
+        const autoMembershipDiscountEnabled = String(systemSettings?.auto_membership_discount || 'false') === 'true';
+
+        if (autoMembershipDiscountEnabled && !discount_id && !coupon_id && manVal === 0 && customer_id) {
             const { data: cust } = await supabaseAdmin.from('customers').select('*').eq('id', customer_id).single();
             if (cust) {
                 let memberDiscount = cust.discount_percent !== null
@@ -601,33 +603,7 @@ export async function POST(request) {
                     for (const bundle of bundleCampaigns) {
                         // Check only Stamp Cards (Price 0 or low?) or Fallback Price Match
                         const isPaidPackage = bundle.price > 0;
-                        if (isPaidPackage) {
-                            if (Math.abs(amount_after - bundle.price) < 0.01) {
-                                // Fallback: Price Match logic
-                                const usageLimit = bundle.usage_limit || 1;
-                                let expires_at = null;
-                                if (bundle.validity_days) {
-                                    const d = new Date();
-                                    d.setDate(d.getDate() + bundle.validity_days);
-                                    expires_at = d.toISOString();
-                                }
-                                const couponsToInsert = [];
-                                for (let i = 0; i < usageLimit; i++) {
-                                    couponsToInsert.push({
-                                        customer_id,
-                                        campaign_id: bundle.id,
-                                        code: `PKG-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
-                                        status: 'ACTIVE',
-                                        metadata: { source: 'PAID_PACKAGE_FALLBACK', transaction_id },
-                                        expires_at
-                                    });
-                                }
-                                if (couponsToInsert.length > 0) {
-                                    await supabase.from('customer_coupons').insert(couponsToInsert);
-                                    new_rewards.push({ name: `Package Purchased: ${bundle.name}`, type: 'BUNDLE' });
-                                }
-                            }
-                        } else {
+                        if (!isPaidPackage) {
                             // Stamp Card Logic
                             const targetCount = bundle.trigger_condition?.target_count || 5;
                             const { data: progress } = await supabase.from('customer_campaign_progress').select('*').eq('customer_id', customer_id).eq('campaign_id', bundle.id).single();

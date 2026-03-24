@@ -126,7 +126,6 @@ export async function POST(request) {
         }
 
         // 8. Return success response
-        console.log(`[API /scan] Scan successful for UID: ${uid}${customer ? `, Customer: ${customer.full_name}, Discount: ${effectiveDiscount}%` : ' (Unlinked)'}`);
         return NextResponse.json({
             status: 'success',
             card,

@@ -10,15 +10,29 @@ export async function GET(request) {
     try {
         const { searchParams } = new URL(request.url);
         const showDeleted = searchParams.get('deleted') === 'true';
+        const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+        const requestedLimit = parseInt(searchParams.get('limit') || '0', 10);
+        const limit = requestedLimit > 0 ? Math.min(requestedLimit, 200) : null;
+        const from = limit ? (page - 1) * limit : null;
+        const to = limit ? from + limit - 1 : null;
 
         let query = supabase
             .from('cards')
             .select(`
-                *,
+                id,
+                uid,
+                customer_id,
+                is_active,
+                valid_from,
+                expires_at,
+                created_at,
+                deleted_at,
+                metadata,
+                signature,
                 customers (
                     full_name
                 )
-            `);
+            `, { count: 'exact' });
 
         if (showDeleted) {
             query = query.not('deleted_at', 'is', null);
@@ -28,7 +42,11 @@ export async function GET(request) {
 
         query = query.order('created_at', { ascending: false });
 
-        const { data, error } = await query;
+        if (limit) {
+            query = query.range(from, to);
+        }
+
+        const { data, error, count } = await query;
 
         if (error) throw error;
 
@@ -37,6 +55,20 @@ export async function GET(request) {
             ...card,
             customer_name: card.customers?.full_name || null
         }));
+
+        // Backward compatibility: many consumers expect data to be an array.
+        // Return paginated envelope only when limit is explicitly requested.
+        if (limit) {
+            return successResponse({
+                rows,
+                pagination: {
+                    page,
+                    limit,
+                    total: count ?? rows.length,
+                    totalPages: Math.max(1, Math.ceil((count ?? rows.length) / limit))
+                }
+            });
+        }
 
         return successResponse(rows);
     } catch (error) {

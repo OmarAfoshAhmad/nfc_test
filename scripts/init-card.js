@@ -1,12 +1,12 @@
 const { NFC } = require('nfc-pcsc');
 const crypto = require('crypto');
 const { promisify } = require('util');
+require('dotenv').config();
 
 const nfc = new NFC();
 
-// [SECURITY] Fixed Secret Key (Must match the Bridge)
-// تم توحيد المفتاح مع الجسر لضمان التوافق
-const YAMEN_SECRET = "e18105f3642bcb546d0790eafef801219c9602915e42413a1e62fffa43434100";
+// Read secret from environment to avoid hardcoded credentials.
+const YAMEN_SECRET = process.env.NFC_SIGNATURE_SECRET || process.env.YAMEN_SECRET;
 const SECTOR_BLOCK = 4;
 
 if (!YAMEN_SECRET || YAMEN_SECRET.length < 32) {

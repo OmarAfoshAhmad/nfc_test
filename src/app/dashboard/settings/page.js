@@ -18,6 +18,7 @@ export default function SettingsPage() {
         currency_symbol: '€',
         accent_color: '#3b82f6',
         enable_sounds: 'true',
+        auto_membership_discount: 'false',
         toast_duration: '3000',
         logo_url: '',
         maintenance_mode: 'false',
@@ -279,6 +280,34 @@ export default function SettingsPage() {
                                         <p className="mt-2 text-xs text-gray-500 font-medium">
                                             {language === 'ar' ? 'اختر عملتك وسيتم تطبيق الرمز في كل مكان' : 'Select your currency and the symbol will be applied everywhere'}
                                         </p>
+                                    </div>
+
+                                    <div className="bg-gray-50 dark:bg-slate-950 p-5 rounded-2xl border border-gray-100 dark:border-slate-800">
+                                        <div className="flex items-center justify-between gap-4">
+                                            <div>
+                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1">
+                                                    {t('auto_membership_discount') || 'الخصم التلقائي للعضوية'}
+                                                </label>
+                                                <p className="text-xs text-gray-500 font-medium">
+                                                    {t('auto_membership_discount_desc') || 'تطبيق خصم العائلة/الأفراد تلقائياً أثناء الدفع عند عدم وجود خصم آخر'}
+                                                </p>
+                                            </div>
+
+                                            <div className="flex items-center gap-3 p-1 bg-white dark:bg-slate-900 rounded-2xl w-fit shadow-sm">
+                                                <button
+                                                    onClick={() => setSettings({ ...settings, auto_membership_discount: 'true' })}
+                                                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${settings.auto_membership_discount === 'true' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400'}`}
+                                                >
+                                                    {t('on')}
+                                                </button>
+                                                <button
+                                                    onClick={() => setSettings({ ...settings, auto_membership_discount: 'false' })}
+                                                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${settings.auto_membership_discount === 'false' ? 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-gray-400' : 'text-gray-400'}`}
+                                                >
+                                                    {t('off')}
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
