@@ -71,6 +71,7 @@ jobs:
           name: nfc-bridge-${{ matrix.label }}
           if-no-files-found: error
           path: |
+            dist-bin/${{ matrix.target }}-runtime/**
             dist-bin/${{ matrix.target }}-nfc-bridge*
 
   release:
@@ -93,18 +94,15 @@ jobs:
           ls -la
           VERSION="${GITHUB_REF_NAME}"
 
-          cat > TERMINAL_CONFIGE.template.json << 'JSON'
-          {
-            "terminalId": 1,
-            "terminalName": "Scanner-01"
-          }
-          JSON
+          for dir in *-runtime; do
+            [ -d "$dir" ] || continue
+            zip -r "nfc-bridge-${VERSION}-${dir}.zip" "$dir"
+          done
 
           for f in *; do
             [ -f "$f" ] || continue
             case "$f" in
-              *.exe)
-                mv "$f" "nfc-bridge-${VERSION}-${f}"
+              nfc-bridge-*.zip|SHA256SUMS.txt)
                 ;;
               *)
                 mv "$f" "nfc-bridge-${VERSION}-${f}"
@@ -112,7 +110,7 @@ jobs:
             esac
           done
 
-          sha256sum * > SHA256SUMS.txt
+          sha256sum nfc-bridge-${VERSION}-* > SHA256SUMS.txt
 
       - name: Create GitHub Release and upload assets
         uses: softprops/action-gh-release@v2

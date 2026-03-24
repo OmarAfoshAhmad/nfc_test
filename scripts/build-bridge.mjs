@@ -1,4 +1,4 @@
-import { mkdirSync, copyFileSync, existsSync, writeFileSync } from 'fs';
+import { mkdirSync, copyFileSync, existsSync, writeFileSync, cpSync } from 'fs';
 import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { spawnSync } from 'child_process';
@@ -143,8 +143,44 @@ const pkgArgs = [
 console.log(`Packaging single executable -> ${outPath}`);
 runCommand(`npx ${pkgArgs.map(quoteArg).join(' ')}`, 'pkg step');
 
+// Build a portable runtime folder so native modules are resolvable next to the executable.
+const runtimeDir = join(outBase, `${basename(target)}-runtime`);
+mkdirSync(runtimeDir, { recursive: true });
+
+const runtimeExePath = join(runtimeDir, exeName);
+copyFileSync(outPath, runtimeExePath);
+
+const runtimeModules = [
+  join(rootDir, 'node_modules', 'nfc-pcsc'),
+  join(rootDir, 'node_modules', '@pokusew', 'pcsclite'),
+  join(rootDir, 'node_modules', 'bindings'),
+  join(rootDir, 'node_modules', 'nan'),
+  join(rootDir, 'node_modules', 'file-uri-to-path')
+];
+
+for (const src of runtimeModules) {
+  if (!existsSync(src)) {
+    console.warn(`Warning: runtime module not found, skipping: ${src}`);
+    continue;
+  }
+  const rel = src.substring(rootDir.length + 1);
+  const dst = join(runtimeDir, rel);
+  mkdirSync(dirname(dst), { recursive: true });
+  cpSync(src, dst, { recursive: true });
+}
+
+// Provide default terminal config in the portable folder for first run.
+writeFileSync(
+  join(runtimeDir, 'TERMINAL_CONFIGE.json'),
+  JSON.stringify({
+    terminalId: 1,
+    terminalName: 'Scanner-01'
+  }, null, 2)
+);
+
 console.log('\nBuild completed. Output:');
 console.log(outPath);
+console.log(`Portable runtime folder: ${runtimeDir}`);
 console.log('\nRuntime behavior:');
 console.log('- Credentials are embedded in executable (not prompted / not in external file).');
 console.log('- Terminal config is loaded from TERMINAL_CONFIGE.json next to executable.');
