@@ -1,0 +1,5 @@
+{
+  "supabaseUrl": "https://<your-project-ref>.supabase.co",
+  "supabaseKey": "<your-service-role-key>",
+  "yamenSecret": "<hex-string-min-32-chars>"
+}

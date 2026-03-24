@@ -1,0 +1,104 @@
+name: Build NFC Bridge Executables
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main", "master"]
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: node20-win-x64
+            label: windows-x64
+          - os: macos-13
+            target: node20-macos-x64
+            label: macos-intel-x64
+          - os: macos-14
+            target: node20-macos-arm64
+            label: macos-apple-silicon-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build executable
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          YAMEN_SECRET: ${{ secrets.YAMEN_SECRET }}
+        run: node scripts/build-bridge.mjs --target ${{ matrix.target }}
+
+      - name: Upload executable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfc-bridge-${{ matrix.label }}
+          if-no-files-found: error
+          path: |
+            dist-bin/${{ matrix.target }}-nfc-bridge*
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: nfc-bridge-*
+          merge-multiple: true
+          path: release-assets
+
+      - name: Create checksums
+        shell: bash
+        run: |
+          cd release-assets
+          ls -la
+          VERSION="${GITHUB_REF_NAME}"
+
+          cat > TERMINAL_CONFIGE.template.json << 'JSON'
+          {
+            "terminalId": 1,
+            "terminalName": "Scanner-01"
+          }
+          JSON
+
+          for f in *; do
+            [ -f "$f" ] || continue
+            case "$f" in
+              *.exe)
+                mv "$f" "nfc-bridge-${VERSION}-${f}"
+                ;;
+              *)
+                mv "$f" "nfc-bridge-${VERSION}-${f}"
+                ;;
+            esac
+          done
+
+          sha256sum * > SHA256SUMS.txt
+
+      - name: Create GitHub Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release-assets/*

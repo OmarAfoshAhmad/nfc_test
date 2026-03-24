@@ -31,19 +31,82 @@ const getCustomRequire = () => {
 };
 const externalRequire = getCustomRequire();
 
-// Use the externalRequire for modules marked as --external in esbuild
-const { NFC } = externalRequire('nfc-pcsc');
-const notifier = externalRequire('node-notifier');
-const bindings = externalRequire('bindings');
+function loadModule(name) {
+    try {
+        // Works in normal Node.js and in pkg snapshot when modules are embedded.
+        return require(name);
+    } catch (_) {
+        // Fallback for SEA/standalone mode where modules are kept beside executable.
+        return externalRequire(name);
+    }
+}
+
+const { NFC } = loadModule('nfc-pcsc');
+const notifier = loadModule('node-notifier');
+const bindings = loadModule('bindings');
 
 // =====================================================
-// 0. EMBEDDED CREDENTIALS (NO DOTENV)
+// 0. CREDENTIALS (LOADED FROM EXTERNAL FILE)
 // =====================================================
 
-// [SECURITY] These keys are embedded for the standalone build
-const SUPABASE_URL = "https://zdirmkypfxuamjbdkwhb.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkaXJta3lwZnh1YW1qYmRrd2hiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NjE1MzgxNCwiZXhwIjoyMDgxNzI5ODE0fQ.CORI1-tLzRPgdqVYxY_HX6eGDasc0l8s9muSS-eGIuk"; // Using Service Role for full access
-const YAMEN_SECRET = "e18105f3642bcb546d0790eafef801219c9602915e42413a1e62fffa43434100";
+const EMBEDDED_SUPABASE_URL = typeof __EMBED_SUPABASE_URL__ !== 'undefined' ? __EMBED_SUPABASE_URL__ : '';
+const EMBEDDED_SUPABASE_KEY = typeof __EMBED_SUPABASE_KEY__ !== 'undefined' ? __EMBED_SUPABASE_KEY__ : '';
+const EMBEDDED_YAMEN_SECRET = typeof __EMBED_YAMEN_SECRET__ !== 'undefined' ? __EMBED_YAMEN_SECRET__ : '';
+
+// Credentials are read from bridge-config.json placed next to the executable.
+// This file must NOT be committed to version control.
+let SUPABASE_URL, SUPABASE_KEY, YAMEN_SECRET;
+
+function loadCredentialsConfig() {
+    if (EMBEDDED_SUPABASE_URL && EMBEDDED_SUPABASE_KEY && EMBEDDED_YAMEN_SECRET) {
+        console.log('✅ Embedded credentials loaded from executable build.');
+        return {
+            supabaseUrl: EMBEDDED_SUPABASE_URL,
+            supabaseKey: EMBEDDED_SUPABASE_KEY,
+            yamenSecret: EMBEDDED_YAMEN_SECRET
+        };
+    }
+
+    const execDir = path.dirname(process.execPath);
+    const configPaths = [
+        path.join(execDir, 'bridge-config.json'),
+        // Fallback: look in the script directory (for dev mode)
+        path.join(__dirname, 'bridge-config.json')
+    ];
+
+    for (const configPath of configPaths) {
+        if (fs.existsSync(configPath)) {
+            try {
+                const cfg = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+                if (!cfg.supabaseUrl || !cfg.supabaseKey || !cfg.yamenSecret) {
+                    console.error(`❌ bridge-config.json is missing required fields (supabaseUrl, supabaseKey, yamenSecret).`);
+                    process.exit(1);
+                }
+                console.log(`✅ Credentials loaded from: ${configPath}`);
+                return cfg;
+            } catch (err) {
+                console.error(`❌ Failed to parse bridge-config.json: ${err.message}`);
+                process.exit(1);
+            }
+        }
+    }
+
+    // No config file found — guide the user
+    console.error('\n❌ CRITICAL: bridge-config.json not found!');
+    console.error('   Create a file named bridge-config.json next to the executable with:');
+    console.error('   {');
+    console.error('     "supabaseUrl": "https://<project>.supabase.co",');
+    console.error('     "supabaseKey": "<service-role-key>",');
+    console.error('     "yamenSecret": "<hex-secret-min-32-chars>"');
+    console.error('   }');
+    console.error('   ⚠️  DO NOT commit this file to version control.\n');
+    process.exit(1);
+}
+
+const credentials = loadCredentialsConfig();
+SUPABASE_URL = credentials.supabaseUrl;
+SUPABASE_KEY = credentials.supabaseKey;
+YAMEN_SECRET = credentials.yamenSecret;
 
 // =====================================================
 // 1. TERMINAL CONFIGURATION (EXTERNAL FILE)

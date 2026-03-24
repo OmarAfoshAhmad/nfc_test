@@ -46,3 +46,6 @@ terminal-config.json
 *.exe
 dist-reader/
 *.log
+
+# NFC Bridge credentials — contains service role key and YAMEN secret
+bridge-config.json
