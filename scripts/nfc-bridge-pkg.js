@@ -42,7 +42,17 @@ function loadModule(name) {
 }
 
 const { NFC } = loadModule('nfc-pcsc');
-const notifier = loadModule('node-notifier');
+let notifier;
+try {
+    notifier = loadModule('node-notifier');
+} catch (_) {
+    // Keep bridge running even if desktop notifications are unavailable.
+    notifier = {
+        notify: ({ title, message }) => {
+            console.log(`[NOTIFY:FALLBACK] ${title || ''} ${message || ''}`.trim());
+        }
+    };
+}
 const bindings = loadModule('bindings');
 
 // =====================================================

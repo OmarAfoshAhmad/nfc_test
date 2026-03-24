@@ -152,6 +152,7 @@ copyFileSync(outPath, runtimeExePath);
 
 const runtimeModules = [
   join(rootDir, 'node_modules', 'nfc-pcsc'),
+  join(rootDir, 'node_modules', 'node-notifier'),
   join(rootDir, 'node_modules', '@pokusew', 'pcsclite'),
   join(rootDir, 'node_modules', 'bindings'),
   join(rootDir, 'node_modules', 'nan'),
