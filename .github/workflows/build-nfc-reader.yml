@@ -1,36 +1,39 @@
 name: Build NFC Reader
 
 on:
-  push:
-    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        # windows-latest: Windows x64
-        # macos-13: Intel Mac (x64)
-        # macos-14: Apple Silicon Mac (arm64)
-        os: [windows-latest, macos-13, macos-14]
+    name: Build legacy reader (if present)
+    runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
-    - name: Use Node.js 18.x
-      uses: actions/setup-node@v4
+    - name: Use Node.js 20.x
+      uses: actions/setup-node@v5
       with:
-        node-version: 18.x
+        node-version: 20.x
         cache: 'npm'
-        cache-dependency-path: nfc-reader-simple/package-lock.json
+
+    - name: Check legacy folder
+      id: check_legacy
+      shell: bash
+      run: |
+        if [ -d "nfc-reader-simple" ]; then
+          echo "exists=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+        fi
 
     - name: Install Dependencies
+      if: steps.check_legacy.outputs.exists == 'true'
       working-directory: ./nfc-reader-simple
       run: npm ci
 
     - name: Build Secure Reader
+      if: steps.check_legacy.outputs.exists == 'true'
       working-directory: ./nfc-reader-simple
       env:
         # These secrets must be added in GitHub Repo Settings > Secrets
@@ -40,7 +43,12 @@ jobs:
       run: node build-reader.js
 
     - name: Upload Artifacts
+      if: steps.check_legacy.outputs.exists == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: nfc-reader-${{ runner.os }}-${{ runner.arch }}
         path: nfc-reader-simple/dist/*
+
+    - name: Skip notice
+      if: steps.check_legacy.outputs.exists != 'true'
+      run: echo "Legacy folder nfc-reader-simple not found. Workflow skipped intentionally."
