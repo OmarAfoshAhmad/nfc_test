@@ -78,17 +78,21 @@ jobs:
           test -s "$TOC_FILE"
 
       - name: Optional encryption (AES-256)
-        if: ${{ secrets.BACKUP_PASSPHRASE != '' }}
         env:
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
           set -euo pipefail
-          printf '%s' "$BACKUP_PASSPHRASE" > .backup_pass
-          openssl enc -aes-256-cbc -pbkdf2 -salt \
-            -in "$DUMP_FILE" \
-            -out "$ENC_FILE" \
-            -pass file:.backup_pass
-          rm -f .backup_pass "$DUMP_FILE"
+          if [ -n "${BACKUP_PASSPHRASE:-}" ]; then
+            printf '%s' "$BACKUP_PASSPHRASE" > .backup_pass
+            openssl enc -aes-256-cbc -pbkdf2 -salt \
+              -in "$DUMP_FILE" \
+              -out "$ENC_FILE" \
+              -pass file:.backup_pass
+            rm -f .backup_pass "$DUMP_FILE"
+            echo "Encryption enabled."
+          else
+            echo "No BACKUP_PASSPHRASE provided. Keeping unencrypted dump artifact."
+          fi
 
       - name: Upload backup artifact
         uses: actions/upload-artifact@v4
