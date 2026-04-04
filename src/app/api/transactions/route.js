@@ -100,7 +100,8 @@ export async function POST(request) {
             manual_discount = 0,
             manual_discount_type = 'percentage',
             payment_method = 'CASH',
-            is_topup = false
+            is_topup = false,
+            disable_auto_rewards = false
         } = body;
 
         // CRITICAL SECURITY FIX: Validate customer_id
@@ -390,6 +391,22 @@ export async function POST(request) {
 
         // NEW: Check if we used a coupon for this transaction
         const isCouponUse = !!coupon_id;
+
+        if (disable_auto_rewards) {
+            const { data: updatedCustomer } = await supabase
+                .from('customers')
+                .select('balance')
+                .eq('id', customer_id)
+                .single();
+
+            return successResponse({
+                status: 'success',
+                transaction_id,
+                amount_after,
+                new_rewards,
+                updated_customer: updatedCustomer || null
+            }, 201);
+        }
 
         try {
             // A. Explicit Bundle Purchase (if campaign_id provided)

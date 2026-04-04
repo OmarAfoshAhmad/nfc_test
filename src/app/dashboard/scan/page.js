@@ -1152,7 +1152,8 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                     card_id: card.id,
                     amount: val, // Full amount
                     payment_method: 'WALLET',
-                    is_topup: false
+                    is_topup: false,
+                    disable_auto_rewards: true
                 })
             });
 
@@ -1199,7 +1200,8 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                     card_id: card.id,
                     amount: payVal, // ONLY deduct this part
                     payment_method: 'WALLET',
-                    is_topup: false
+                    is_topup: false,
+                    disable_auto_rewards: true
                 })
             });
 
