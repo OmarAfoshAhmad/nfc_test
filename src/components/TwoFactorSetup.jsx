@@ -162,6 +162,7 @@ export default function TwoFactorSetup() {
                     <p className="text-sm text-gray-600 dark:text-gray-400">1. Scan this QR code with your authenticator app</p>
                     {qrData && (
                         <div className="flex justify-center p-6 bg-white rounded-2xl shadow-inner border mx-auto w-fit">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={qrData} alt="2FA QR Code" className="w-40 h-40" />
                         </div>
                     )}

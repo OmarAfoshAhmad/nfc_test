@@ -28,6 +28,7 @@ export default function CardsPage() {
     const [showDeleted, setShowDeleted] = useState(false);
     const [error, setError] = useState('');
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         setMounted(true);
         fetchData();

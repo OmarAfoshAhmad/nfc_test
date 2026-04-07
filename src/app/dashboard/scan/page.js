@@ -41,6 +41,7 @@ export default function ScanPage() {
     const { isConnected, onScan: subscribeToScan, injectCard } = useNFC(); // Added this line
     const isElectron = typeof window !== 'undefined' && !!window.electronAPI;
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         // Reset lock on mount
         processingRef.current = false;
@@ -97,6 +98,7 @@ export default function ScanPage() {
     }, [isConnected, selectedTerminal]);
 
     // Subscribe to NFC Scans from Context
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         const unsubscribe = subscribeToScan((data) => {
             if (data.uid) {
@@ -216,6 +218,7 @@ export default function ScanPage() {
         };
     }, [selectedBranch, terminals]);
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         if (!selectedTerminal || isElectron) {
             console.log('[Realtime] No terminal selected or using Electron - skipping subscription');

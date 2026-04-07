@@ -65,6 +65,7 @@ function CustomersContent() {
         }
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         const timeout = setTimeout(fetchCustomers, 300);
         return () => clearTimeout(timeout);

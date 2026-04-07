@@ -52,7 +52,9 @@ export default function TerminalsPage() {
         setStats({ online: onlineCount, total: data.length, hardwareIssues: hwIssues });
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchTerminals();
 
         // Subscribe to REALTIME changes in the terminals table

@@ -336,7 +336,7 @@ export function NFCProvider({ children }) {
                 throw e;
             }
         }
-    }), [isConnected, isHwConnected, isCloudConnected, readerName, onScan, selectedTerminalId]); // Dependencies for useMemo
+    }), [isConnected, isHwConnected, isCloudConnected, readerName, onScan, selectedTerminalId, connectHwReader]); // Dependencies for useMemo
 
     return (
         <NFCContext.Provider value={value}>

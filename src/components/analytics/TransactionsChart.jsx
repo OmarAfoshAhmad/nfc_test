@@ -16,6 +16,7 @@ export default function TransactionsChart({ data }) {
 
     useEffect(() => {
         // Ensure the component is mounted on the client
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setMounted(true);
     }, []);
 

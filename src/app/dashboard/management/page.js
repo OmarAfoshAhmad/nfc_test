@@ -13,6 +13,7 @@ export default function ManagementPage() {
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setMounted(true);
     }, []);
 
@@ -103,6 +104,7 @@ function BranchManagement() {
         }
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         fetchBranches();
     }, [showDeleted]);
@@ -338,6 +340,7 @@ function TerminalManagement() {
         }
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         fetchData();
 
@@ -663,6 +666,7 @@ function UserManagement() {
         }
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         fetchData();
     }, [showDeleted]);

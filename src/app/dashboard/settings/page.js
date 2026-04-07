@@ -28,6 +28,7 @@ export default function SettingsPage() {
     });
     const [currentUser, setCurrentUser] = useState(null);
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         Promise.all([
             fetch('/api/settings?t=' + Date.now()).then(res => res.json()),

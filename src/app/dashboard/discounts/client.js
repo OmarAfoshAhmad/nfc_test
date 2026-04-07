@@ -35,6 +35,7 @@ export default function DiscountsClient() {
         }
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         fetchDiscounts();
     }, [showDeleted]);

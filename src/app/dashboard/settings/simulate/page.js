@@ -169,7 +169,7 @@ export default function SimulateScanPage() {
                     <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/10">
                         <p className="text-xs text-amber-400/80 leading-relaxed uppercase font-black tracking-tighter mb-2">تعليمات التشغيل 🛠️</p>
                         <ul className="text-[10px] text-amber-400/70 space-y-1 list-disc list-inside">
-                            <li>اضغط على <b>"جلب بيانات الأجهزة"</b> في الأعلى لتعبئة البيانات تلقائياً.</li>
+                            <li>اضغط على <b>&quot;جلب بيانات الأجهزة&quot;</b> في الأعلى لتعبئة البيانات تلقائياً.</li>
                             <li>تأكد من وجود عميل مسجل بـ UID المذكور أعلاه (أو غيره لعميل آخر).</li>
                             <li>ستظهر النتائج فوراً في صفحة الـ Scan المفتوحة في المتصفح.</li>
                         </ul>

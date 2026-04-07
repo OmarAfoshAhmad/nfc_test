@@ -105,9 +105,11 @@ export function verifySignatureBuffer(uid, data) {
     return Buffer.compare(data.slice(0, 16), expected) === 0;
 }
 
-export default {
+const nfcSignature = {
     generateSignature,
     generateSignatureBuffer,
     verifySignature,
     verifySignatureBuffer
 };
+
+export default nfcSignature;

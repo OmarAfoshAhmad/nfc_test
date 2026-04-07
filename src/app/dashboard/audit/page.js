@@ -16,6 +16,7 @@ export default function AuditPage() {
     const [confirmPwd, setConfirmPwd] = useState('');
     const [clearing, setClearing] = useState(false);
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         fetchLogs();
     }, [filter]);

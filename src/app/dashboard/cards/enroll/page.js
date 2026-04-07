@@ -336,7 +336,7 @@ export default function EnrollCardPage() {
                         {!selectedCustomer && (
                             <div>
                                 <h3 className="text-xl font-bold text-gray-500">Unassigned Card</h3>
-                                <p className="text-sm text-muted-foreground">Card won't be linked to a customer</p>
+                                <p className="text-sm text-muted-foreground">Card won&apos;t be linked to a customer</p>
                             </div>
                         )}
                     </div>
