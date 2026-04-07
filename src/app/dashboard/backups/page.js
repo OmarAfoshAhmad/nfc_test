@@ -4,13 +4,16 @@ import { useLanguage } from '@/lib/LanguageContext';
 import { format } from 'date-fns';
 import { Loader2, Database, Download, Clock, HardDrive } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase'; // Client side for download URL if needed
 
 export default function BackupsPage() {
     const { language } = useLanguage();
     const [backups, setBackups] = useState([]);
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
+    const [exportingLocal, setExportingLocal] = useState(false);
+    const [restoreFile, setRestoreFile] = useState(null);
+    const [restoring, setRestoring] = useState(false);
+    const [dryRunRestore, setDryRunRestore] = useState(true);
 
     // Schedule State (Mock persistence)
     const [schedule, setSchedule] = useState('DAILY'); // OFF, DAILY, WEEKLY
@@ -24,9 +27,10 @@ export default function BackupsPage() {
         try {
             const res = await fetch('/api/backups');
             const data = await res.json();
-            if (Array.isArray(data)) {
-                setBackups(data);
-            }
+            const files = Array.isArray(data)
+                ? data
+                : (Array.isArray(data?.files) ? data.files : []);
+            setBackups(files);
         } catch (error) {
             toast.error('Failed to load backups');
         } finally {
@@ -67,6 +71,82 @@ export default function BackupsPage() {
         }
     };
 
+    const handleExportLocal = async () => {
+        setExportingLocal(true);
+        try {
+            const res = await fetch('/api/backups?action=export');
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Failed to export backup');
+            }
+
+            const blob = await res.blob();
+            const disposition = res.headers.get('content-disposition') || '';
+            const nameMatch = disposition.match(/filename="([^"]+)"/i);
+            const fileName = nameMatch?.[1] || `backup_local_${Date.now()}.json`;
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+
+            toast.success(language === 'ar' ? 'تم تنزيل نسخة محلية' : 'Local backup downloaded');
+        } catch (error) {
+            toast.error(error.message || 'Export failed');
+        } finally {
+            setExportingLocal(false);
+        }
+    };
+
+    const handleRestore = async () => {
+        if (!restoreFile) {
+            toast.error(language === 'ar' ? 'اختر ملف نسخة JSON أولاً' : 'Choose a JSON backup file first');
+            return;
+        }
+
+        setRestoring(true);
+        try {
+            const text = await restoreFile.text();
+            const json = JSON.parse(text);
+
+            const res = await fetch('/api/backups', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'restore',
+                    backup: json,
+                    dry_run: dryRunRestore,
+                    chunk_size: 500,
+                }),
+            });
+
+            const data = await res.json();
+            if (!res.ok && res.status !== 207) {
+                throw new Error(data.error || data.message || 'Restore failed');
+            }
+
+            if (res.status === 207 || data?.success === false) {
+                toast.warning(language === 'ar' ? 'اكتمل الاسترجاع مع بعض الأخطاء' : 'Restore finished with some errors');
+            } else {
+                toast.success(
+                    dryRunRestore
+                        ? (language === 'ar' ? 'نجح الفحص بدون تطبيق (Dry Run)' : 'Dry run completed successfully')
+                        : (language === 'ar' ? 'تم الاسترجاع بنجاح' : 'Restore completed successfully')
+                );
+            }
+
+            fetchBackups();
+        } catch (error) {
+            toast.error(error.message || 'Restore failed');
+        } finally {
+            setRestoring(false);
+        }
+    };
+
     return (
         <div className="p-6 max-w-7xl mx-auto space-y-8" dir={language === 'ar' ? 'rtl' : 'ltr'}>
 
@@ -89,6 +169,15 @@ export default function BackupsPage() {
                 >
                     {creating ? <Loader2 className="animate-spin" /> : <HardDrive size={20} />}
                     {language === 'ar' ? (creating ? 'جاري النسخ...' : 'نسخة يدوية الآن') : (creating ? 'Backing up...' : 'Manual Backup')}
+                </button>
+
+                <button
+                    onClick={handleExportLocal}
+                    disabled={exportingLocal}
+                    className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-4 rounded-2xl font-bold transition-all shadow-xl shadow-emerald-200 dark:shadow-none hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {exportingLocal ? <Loader2 className="animate-spin" /> : <Download size={20} />}
+                    {language === 'ar' ? (exportingLocal ? 'جاري التنزيل...' : 'نسخة محلية JSON') : (exportingLocal ? 'Downloading...' : 'Local JSON Backup')}
                 </button>
             </div>
 
@@ -155,6 +244,40 @@ export default function BackupsPage() {
                     <p className="text-xs text-center text-gray-400 mt-4">
                         {language === 'ar' ? 'ملاحظة: يتطلب هذا إعداد Cron Job على السيرفر.' : 'Note: This requires Cron Job setup on server.'}
                     </p>
+
+                    <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                        <h4 className="text-lg font-bold text-gray-900 dark:text-white">
+                            {language === 'ar' ? 'استرجاع نسخة JSON' : 'Restore JSON Backup'}
+                        </h4>
+
+                        <input
+                            type="file"
+                            accept="application/json,.json"
+                            onChange={(e) => setRestoreFile(e.target.files?.[0] || null)}
+                            className="w-full text-sm text-gray-700 dark:text-gray-300 file:me-3 file:px-3 file:py-2 file:rounded-lg file:border-0 file:bg-gray-100 dark:file:bg-gray-700 file:text-gray-700 dark:file:text-gray-200"
+                        />
+
+                        <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                            <input
+                                type="checkbox"
+                                checked={dryRunRestore}
+                                onChange={(e) => setDryRunRestore(e.target.checked)}
+                            />
+                            {language === 'ar' ? 'فحص فقط (Dry Run بدون كتابة)' : 'Dry run only (no write)'}
+                        </label>
+
+                        <button
+                            onClick={handleRestore}
+                            disabled={restoring || !restoreFile}
+                            className="w-full mt-1 bg-amber-600 hover:bg-amber-700 text-white py-3 rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {restoring
+                                ? (language === 'ar' ? 'جاري الاسترجاع...' : 'Restoring...')
+                                : (dryRunRestore
+                                    ? (language === 'ar' ? 'فحص النسخة' : 'Validate Backup')
+                                    : (language === 'ar' ? 'استرجاع الآن' : 'Restore Now'))}
+                        </button>
+                    </div>
                 </div>
 
                 {/* Backups List */}
