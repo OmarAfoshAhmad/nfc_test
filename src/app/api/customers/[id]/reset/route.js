@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { getSession } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
+import { logWalletAction } from '@/lib/wallet';
 
 export async function POST(request, { params }) {
     const session = await getSession();
@@ -9,7 +10,7 @@ export async function POST(request, { params }) {
 
     const { id } = await params;
     const body = await request.json();
-    const { type } = body;
+    const { type, target_balance = 0, cleanup_automation = true, clear_coupons = true } = body;
 
     console.log(`[RESET] Starting reset for customer ${id}, type: ${type}`);
 
@@ -26,41 +27,49 @@ export async function POST(request, { params }) {
             return NextResponse.json({ message: 'العميل غير موجود' }, { status: 404 });
         }
 
-        // 2. Handle Balance Reset
+        // 2. Handle Balance Reset / Set Balance
         if (type === 'BALANCE' || type === 'ALL') {
-            const currentBalance = customer.balance || 0;
-            console.log(`[RESET] Resetting balance from ${currentBalance} to 0`);
+            const currentBalance = parseFloat(customer.balance || 0);
+            const target = Number.isFinite(parseFloat(target_balance)) ? Math.max(0, parseFloat(target_balance)) : 0;
+            const delta = target - currentBalance;
 
-            const { error: balanceError } = await supabase
-                .from('customers')
-                .update({ balance: 0 })
-                .eq('id', id);
+            console.log(`[RESET] Adjusting balance from ${currentBalance} to ${target} (delta: ${delta})`);
 
-            if (balanceError) {
-                console.error('[RESET] Balance update error:', balanceError);
-                throw balanceError;
+            if (delta !== 0) {
+                await logWalletAction({
+                    customer_id: parseInt(id, 10),
+                    amount: delta,
+                    type: delta > 0 ? 'DEPOSIT' : 'WITHDRAWAL',
+                    reason: `Admin balance adjustment to ${target}`,
+                    admin_id: session.id
+                });
             }
 
-            // Record adjustment transaction
-            const { data: card } = await supabase
-                .from('cards')
-                .select('id')
-                .eq('customer_id', id)
-                .eq('is_active', true)
-                .maybeSingle();
+            // Optional automation cleanup to prevent auto-created bundles/progress after reset.
+            if (cleanup_automation) {
+                const { error: progressError } = await supabase
+                    .from('customer_campaign_progress')
+                    .delete()
+                    .eq('customer_id', id);
 
-            const { error: transError } = await supabase.from('transactions').insert([{
-                customer_id: id,
-                card_id: card?.id || null,
-                amount_before: currentBalance,
-                amount_after: 0,
-                points_earned: 0,
-                payment_method: 'CASH', // Safer to use standard CASH
-                status: 'success',
-                notes: `حذف الرصيد إدارياً (القيمة الملغاة: ${currentBalance})`
-            }]);
+                if (progressError) {
+                    console.error('[RESET] Campaign progress cleanup error:', progressError);
+                    throw progressError;
+                }
 
-            if (transError) console.warn('[RESET] Transaction logging failed (non-critical):', transError);
+                if (clear_coupons) {
+                    const { error: couponError } = await supabase
+                        .from('customer_coupons')
+                        .update({ status: 'VOIDED' })
+                        .eq('customer_id', id)
+                        .in('status', ['ACTIVE', 'active', 'Active']);
+
+                    if (couponError) {
+                        console.error('[RESET] Coupon cleanup error:', couponError);
+                        throw couponError;
+                    }
+                }
+            }
         }
 
         // 3. Handle Coupon/Package Clear
@@ -91,7 +100,13 @@ export async function POST(request, { params }) {
                 action: 'ADMIN_RESET',
                 entity: 'customers',
                 entityId: id,
-                details: { type, previous_balance: customer.balance },
+                details: {
+                    type,
+                    previous_balance: customer.balance,
+                    target_balance,
+                    cleanup_automation,
+                    clear_coupons
+                },
                 req: request
             });
         } catch (auditErr) {

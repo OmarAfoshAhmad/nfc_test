@@ -104,6 +104,11 @@ export async function POST(request) {
             disable_auto_rewards = false
         } = body;
 
+        const effectiveDisableAutoRewards =
+            Boolean(disable_auto_rewards) ||
+            payment_method === 'WALLET' ||
+            is_topup;
+
         // CRITICAL SECURITY FIX: Validate customer_id
         if (!customer_id || customer_id === 'undefined' || customer_id === 'null') {
             return NextResponse.json({
@@ -392,7 +397,7 @@ export async function POST(request) {
         // NEW: Check if we used a coupon for this transaction
         const isCouponUse = !!coupon_id;
 
-        if (disable_auto_rewards) {
+        if (effectiveDisableAutoRewards) {
             const { data: updatedCustomer } = await supabase
                 .from('customers')
                 .select('balance')

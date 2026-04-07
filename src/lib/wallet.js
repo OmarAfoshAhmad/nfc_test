@@ -1,12 +1,14 @@
-import { supabase } from './supabase';
+import { supabase, supabaseAdmin } from './supabase';
 
 /**
  * Professional Wallet Management Library
  * Handles debits, credits, and ledger logging with transactional integrity.
  */
 
+const db = supabaseAdmin || supabase;
+
 export async function getBalance(customerId) {
-    const { data, error } = await supabase
+    const { data, error } = await db
         .from('customers')
         .select('balance')
         .eq('id', customerId)
@@ -22,13 +24,16 @@ export async function logWalletAction({ customer_id, amount, type, reason, trans
         throw new Error('CRITICAL: logWalletAction called without customer_id. Operation aborted to protect data integrity.');
     }
 
-    const { data, error } = await supabase.rpc('wallet_apply_delta', {
+    const normalizedAmount = parseFloat(amount);
+    const normalizedAdminId = Number.isInteger(Number(admin_id)) ? Number(admin_id) : null;
+
+    const { data, error } = await db.rpc('wallet_apply_delta', {
         p_customer_id: customer_id,
-        p_amount: amount,
+        p_amount: normalizedAmount,
         p_type: type,
         p_reason: reason || null,
         p_transaction_id: transaction_id || null,
-        p_admin_id: admin_id || null
+        p_admin_id: normalizedAdminId
     });
 
     if (error) throw error;
@@ -36,10 +41,11 @@ export async function logWalletAction({ customer_id, amount, type, reason, trans
 }
 
 export async function topUp(customerId, amount, adminId, reason = 'Wallet Top-up') {
-    if (amount <= 0) throw new Error('Amount must be positive');
+    const numericAmount = parseFloat(amount);
+    if (!numericAmount || numericAmount <= 0) throw new Error('Amount must be positive');
     return await logWalletAction({
         customer_id: customerId,
-        amount: amount,
+        amount: numericAmount,
         type: 'DEPOSIT',
         reason,
         admin_id: adminId
@@ -47,14 +53,17 @@ export async function topUp(customerId, amount, adminId, reason = 'Wallet Top-up
 }
 
 export async function payWithWallet(customerId, amount, transactionId, adminId) {
+    const numericAmount = parseFloat(amount);
+    if (!numericAmount || numericAmount <= 0) throw new Error('Amount must be positive');
+
     const balance = await getBalance(customerId);
-    if (balance < amount) {
+    if (balance < numericAmount) {
         throw new Error('Insufficient wallet balance');
     }
 
     return await logWalletAction({
         customer_id: customerId,
-        amount: -amount,
+        amount: -numericAmount,
         type: 'WITHDRAWAL',
         reason: 'Payment for Transaction',
         transaction_id: transactionId,

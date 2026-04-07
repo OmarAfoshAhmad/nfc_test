@@ -547,7 +547,12 @@ export default function ScanPage() {
             const res = await fetch(`/api/customers/${scanResult.customer.id}/reset`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type })
+                body: JSON.stringify({
+                    type,
+                    target_balance: type === 'BALANCE' ? 0 : undefined,
+                    cleanup_automation: type === 'BALANCE' || type === 'ALL',
+                    clear_coupons: type === 'BALANCE' || type === 'COUPONS' || type === 'ALL'
+                })
             });
             const data = await res.json();
             if (res.ok) {
@@ -1116,7 +1121,8 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                 setManualAmount('');
                 if (onRefresh) onRefresh();
             } else {
-                toast.error(t('error_general'));
+                const err = await res.json().catch(() => ({}));
+                toast.error(err.message || t('error_general'));
             }
         } finally {
             setLoading(false);
