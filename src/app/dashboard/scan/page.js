@@ -998,6 +998,15 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
     const [showStore, setShowStore] = useState(false);
     const customerCoupons = Array.isArray(coupons) ? coupons : [];
 
+    const normalizeNumericInput = (value) => String(value || '')
+        .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632))
+        .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776))
+        .replace(/,/g, '.')
+        .replace(/[^\d.]/g, '')
+        .replace(/(\..*)\./g, '$1');
+
+    const parseMoney = (value) => parseFloat(normalizeNumericInput(value)) || 0;
+
 
 
     // Filter valid coupons - Show individually (no grouping for split bundles)
@@ -1026,7 +1035,7 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
         }));
 
     // --- CALCULATIONS FOR PREVIEW ---
-    const billAmount = parseFloat(amount) || 0;
+    const billAmount = parseMoney(amount);
 
     // Calculate expected discount based on selection
     let discountAmount = 0;
@@ -1095,7 +1104,7 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
 
     // Direct Cash Top-up Logic
     const handleDirectTopUp = async () => {
-        const val = parseFloat(manualAmount);
+        const val = parseMoney(manualAmount);
         if (!val || val <= 0) {
             toast.error(t('error_invalid_amount'));
             return;
@@ -1131,7 +1140,7 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
 
     // Pay from Wallet Balance
     const handlePayFromWallet = async () => {
-        const val = parseFloat(amount);
+        const val = parseMoney(amount);
         const bal = parseFloat(customer?.balance || 0);
 
         if (!val || val <= 0) {
@@ -1183,8 +1192,8 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
 
     // Execute Partial Payment
     const handleMakePartialPayment = async () => {
-        const payVal = parseFloat(partialAmount);
-        const totalBill = parseFloat(amount);
+        const payVal = parseMoney(partialAmount);
+        const totalBill = parseMoney(amount);
         const bal = parseFloat(customer?.balance || 0);
 
         if (!payVal || payVal <= 0) {
@@ -1366,9 +1375,11 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">{t('amount_to_pay_wallet') || 'Deduct from Wallet'}</label>
                                 <div className="relative">
                                     <input
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        dir="ltr"
                                         value={partialAmount}
-                                        onChange={(e) => setPartialAmount(e.target.value)}
+                                        onChange={(e) => setPartialAmount(normalizeNumericInput(e.target.value))}
                                         className="w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-xl font-black text-white focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all"
                                     />
                                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">{currency}</span>
@@ -1424,10 +1435,12 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                             <div className="space-y-2">
                                 <div className="relative">
                                     <input
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        dir="ltr"
                                         placeholder="0.00"
                                         value={manualAmount}
-                                        onChange={(e) => setManualAmount(e.target.value)}
+                                        onChange={(e) => setManualAmount(normalizeNumericInput(e.target.value))}
                                         className="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-3 py-2 text-lg font-black text-white outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all pr-12"
                                     />
                                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold">{currency}</span>
@@ -1535,10 +1548,12 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                                         <div className="flex items-baseline justify-center gap-1 w-full">
                                             <span className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase pt-1">{currency}</span>
                                             <input
-                                                type="number"
+                                                type="text"
+                                                inputMode="decimal"
+                                                dir="ltr"
                                                 placeholder="0.00"
                                                 value={amount}
-                                                onChange={(e) => setAmount(e.target.value)}
+                                                onChange={(e) => setAmount(normalizeNumericInput(e.target.value))}
                                                 className="bg-transparent border-none text-2xl font-black text-slate-900 dark:text-white outline-none text-center placeholder:text-slate-300 dark:placeholder:text-slate-800 font-mono tracking-tighter w-24"
                                             />
                                         </div>
