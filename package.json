@@ -23,7 +23,9 @@
     "sea:mac": "npx postject dist-bin/nfc-bridge-mac NODE_SEA_BLOB sea-prep.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 --macho-segment-name NODE_SEA",
     "pkg:mac-old": "npx pkg . --targets node16-macos-x64,node16-macos-arm64 --output dist-bin/nfc-bridge-mac-old",
     "backup": "node scripts/backup-db.mjs",
-    "backup:local": "node scripts/backup-db.mjs --local"
+    "backup:local": "node scripts/backup-db.mjs --local",
+    "restore": "node scripts/restore-db.mjs",
+    "restore:dry": "node scripts/restore-db.mjs --dry-run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.89.0",
