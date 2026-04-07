@@ -14,6 +14,7 @@ export default function BackupsPage() {
     const [restoreFile, setRestoreFile] = useState(null);
     const [restoring, setRestoring] = useState(false);
     const [dryRunRestore, setDryRunRestore] = useState(true);
+    const [restoreSummary, setRestoreSummary] = useState(null);
 
     // Schedule State (Mock persistence)
     const [schedule, setSchedule] = useState('DAILY'); // OFF, DAILY, WEEKLY
@@ -109,6 +110,7 @@ export default function BackupsPage() {
         }
 
         setRestoring(true);
+        setRestoreSummary(null);
         try {
             const text = await restoreFile.text();
             const json = JSON.parse(text);
@@ -127,6 +129,10 @@ export default function BackupsPage() {
             const data = await res.json();
             if (!res.ok && res.status !== 207) {
                 throw new Error(data.error || data.message || 'Restore failed');
+            }
+
+            if (data?.summary) {
+                setRestoreSummary(data.summary);
             }
 
             if (res.status === 207 || data?.success === false) {
@@ -253,7 +259,10 @@ export default function BackupsPage() {
                         <input
                             type="file"
                             accept="application/json,.json"
-                            onChange={(e) => setRestoreFile(e.target.files?.[0] || null)}
+                            onChange={(e) => {
+                                setRestoreFile(e.target.files?.[0] || null);
+                                setRestoreSummary(null);
+                            }}
                             className="w-full text-sm text-gray-700 dark:text-gray-300 file:me-3 file:px-3 file:py-2 file:rounded-lg file:border-0 file:bg-gray-100 dark:file:bg-gray-700 file:text-gray-700 dark:file:text-gray-200"
                         />
 
@@ -277,6 +286,53 @@ export default function BackupsPage() {
                                     ? (language === 'ar' ? 'فحص النسخة' : 'Validate Backup')
                                     : (language === 'ar' ? 'استرجاع الآن' : 'Restore Now'))}
                         </button>
+
+                        {restoreSummary && (
+                            <div className="mt-4 rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-900/40 space-y-3">
+                                <div className="flex items-center justify-between text-sm">
+                                    <span className="font-bold text-slate-700 dark:text-slate-200">
+                                        {language === 'ar' ? 'تقرير الاسترجاع' : 'Restore Report'}
+                                    </span>
+                                    <span className={`text-xs font-black px-2 py-1 rounded ${restoreSummary.failed_tables?.length ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'}`}>
+                                        {restoreSummary.failed_tables?.length
+                                            ? (language === 'ar' ? 'مع أخطاء' : 'With Errors')
+                                            : (language === 'ar' ? 'ناجح' : 'Success')}
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                    <div className="p-2 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                        <div className="text-slate-500">{language === 'ar' ? 'الإجمالي' : 'Total Rows'}</div>
+                                        <div className="font-black text-slate-800 dark:text-slate-100">{restoreSummary.total_rows ?? 0}</div>
+                                    </div>
+                                    <div className="p-2 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                        <div className="text-slate-500">{language === 'ar' ? 'فحص فقط' : 'Dry Run'}</div>
+                                        <div className="font-black text-slate-800 dark:text-slate-100">{restoreSummary.dry_run ? 'Yes' : 'No'}</div>
+                                    </div>
+                                </div>
+
+                                <div className="max-h-40 overflow-auto space-y-1 text-xs">
+                                    {Object.entries(restoreSummary.tables || {}).map(([tableName, info]) => (
+                                        <div key={tableName} className="flex items-center justify-between p-2 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                            <span className="font-mono text-slate-700 dark:text-slate-300">{tableName}</span>
+                                            <span className="font-bold text-slate-900 dark:text-slate-100">{info?.restored ?? 0}/{info?.rows ?? 0}</span>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {(restoreSummary.failed_tables || []).length > 0 && (
+                                    <div className="space-y-1 text-xs">
+                                        <div className="font-bold text-red-600 dark:text-red-300">{language === 'ar' ? 'الجداول التي فشلت:' : 'Failed Tables:'}</div>
+                                        {(restoreSummary.failed_tables || []).map((f, idx) => (
+                                            <div key={`${f.table}-${idx}`} className="p-2 rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700/40 text-red-700 dark:text-red-300">
+                                                <div className="font-mono">{f.table}</div>
+                                                <div className="opacity-90">{f.message}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
 
