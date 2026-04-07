@@ -3,12 +3,14 @@ import { useState, useEffect } from 'react';
 import { useLanguage } from '@/lib/LanguageContext';
 import { useSettings } from '@/lib/SettingsContext';
 import { Settings, DollarSign, Coins, Save, Palette, Shield, Globe, Info, Activity, Upload, Loader2, Image as ImageIcon, Database } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 
 export default function SettingsPage() {
     const { t, language, dir } = useLanguage();
     const { refreshSettings, updateSettingsState } = useSettings();
+    const router = useRouter();
     const [activeTab, setActiveTab] = useState('general');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -226,6 +228,30 @@ export default function SettingsPage() {
                                         <p className="text-[10px] text-gray-400 mt-1">
                                             {t('expiry_warning_desc') || 'عدد الأيام قبل انتهاء البطاقة ليظهر تنبيه التحذير'}
                                         </p>
+                                    </div>
+
+                                    <div className="mt-6 rounded-3xl border border-blue-100 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-900/10 p-5">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div>
+                                                <h4 className="font-black text-blue-900 dark:text-blue-200 flex items-center gap-2">
+                                                    <Database size={18} className="text-blue-500" />
+                                                    {language === 'ar' ? 'النسخ الاحتياطي والاسترجاع' : 'Backup & Restore'}
+                                                </h4>
+                                                <p className="text-xs text-blue-700 dark:text-blue-300 mt-2 font-medium">
+                                                    {language === 'ar'
+                                                        ? 'إدارة النسخ المحلية ونسخ التخزين واسترجاع ملفات JSON من صفحة النسخ الاحتياطي.'
+                                                        : 'Manage local backups, storage backups, and JSON restore from the backups page.'}
+                                                </p>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => router.push('/dashboard/backups')}
+                                                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs transition-all active:scale-95"
+                                            >
+                                                {language === 'ar' ? 'فتح صفحة النسخ' : 'Open Backups'}
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

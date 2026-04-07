@@ -231,7 +231,7 @@ async function main() {
       supabase_url: SUPABASE_URL,
       project_ref: HOST.split('.')[0],
       tables: tables,
-      version: '1.0.0',
+      version: 'v2.0',
     },
     data: {},
     row_counts: {},

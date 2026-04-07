@@ -79,7 +79,7 @@ export default function LoginPage() {
 
         <div className="mt-8 pt-6 border-t border-gray-700 flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-gray-500">
           <span>&copy; 2026 NFC Discount</span>
-          <span className="bg-gray-900 px-2 py-0.5 rounded border border-gray-700 text-blue-400">v0.2.4</span>
+          <span className="bg-gray-900 px-2 py-0.5 rounded border border-gray-700 text-blue-400">v2.0</span>
         </div>
       </div>
     </div>
