@@ -423,6 +423,18 @@ export async function POST(request) {
                     .single();
 
                 if (targetCampaign && targetCampaign.type === 'BUNDLE') {
+                    const nowIso = new Date().toISOString();
+
+                    // Month rollover safety: mark stale ACTIVE coupons as EXPIRED before ownership check.
+                    await supabaseAdmin
+                        .from('customer_coupons')
+                        .update({ status: 'EXPIRED' })
+                        .eq('customer_id', customer_id)
+                        .eq('campaign_id', campaign_id)
+                        .eq('status', 'ACTIVE')
+                        .not('expires_at', 'is', null)
+                        .lte('expires_at', nowIso);
+
                     // ✅ OWNERSHIP CHECK: Prevent duplicate active bundles
                     const { data: existingBundle } = await supabaseAdmin
                         .from('customer_coupons')
@@ -430,6 +442,7 @@ export async function POST(request) {
                         .eq('customer_id', customer_id)
                         .eq('campaign_id', campaign_id)
                         .eq('status', 'ACTIVE')
+                        .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
                         .limit(1)
                         .maybeSingle();
 
