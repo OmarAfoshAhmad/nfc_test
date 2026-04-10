@@ -108,14 +108,20 @@ export async function POST(request) {
         const coupons = (rawCoupons || []).filter((c) => {
             const status = String(c?.status || '').toUpperCase();
             const isActive = status === 'ACTIVE';
-            const notExpired = !c?.expires_at || new Date(c.expires_at) > nowDate;
+            const byExpiresAt = !c?.expires_at || new Date(c.expires_at) > nowDate;
+            const cycleEndRaw = c?.metadata?.cycle_end_at;
+            const byCycleEnd = !cycleEndRaw || new Date(cycleEndRaw) > nowDate;
+            const notExpired = byExpiresAt && byCycleEnd;
             return isActive && notExpired;
         });
 
         const expiredActiveCouponIds = (rawCoupons || [])
             .filter((c) => {
                 const status = String(c?.status || '').toUpperCase();
-                return status === 'ACTIVE' && c?.expires_at && new Date(c.expires_at) <= nowDate;
+                const expiredByDate = c?.expires_at && new Date(c.expires_at) <= nowDate;
+                const cycleEndRaw = c?.metadata?.cycle_end_at;
+                const expiredByCycle = cycleEndRaw && new Date(cycleEndRaw) <= nowDate;
+                return status === 'ACTIVE' && (expiredByDate || expiredByCycle);
             })
             .map((c) => c.id)
             .filter(Boolean);
@@ -196,7 +202,11 @@ export async function GET(request) {
         const activeQuotas = (rawActiveQuotas || []).filter((c) => {
             const status = String(c?.status || '').toUpperCase();
             const isActive = status === 'ACTIVE';
-            const notExpired = !c?.expires_at || new Date(c.expires_at) > new Date();
+            const now = new Date();
+            const byExpiresAt = !c?.expires_at || new Date(c.expires_at) > now;
+            const cycleEndRaw = c?.metadata?.cycle_end_at;
+            const byCycleEnd = !cycleEndRaw || new Date(cycleEndRaw) > now;
+            const notExpired = byExpiresAt && byCycleEnd;
             return isActive && notExpired;
         });
 

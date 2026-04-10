@@ -1022,7 +1022,11 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
 
         const now = new Date();
         const cycleStartRaw = coupon?.metadata?.cycle_start_at;
+        const cycleEndRaw = coupon?.metadata?.cycle_end_at;
         const cycleStart = cycleStartRaw ? new Date(cycleStartRaw) : null;
+        const cycleEnd = cycleEndRaw ? new Date(cycleEndRaw) : null;
+
+        if (cycleEnd && now > cycleEnd) return 'expired';
 
         // Do not start weekly cancellation/orange state before the configured cycle start.
         if (cycleStart && now < cycleStart) return 'green';
@@ -1039,6 +1043,9 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
         .filter(c => {
             // Filter out consumed parts
             if (c.status !== 'ACTIVE' && c.status !== 'active') return false;
+
+            const familyState = getFamilySectionState(c);
+            if (familyState === 'expired') return false;
 
             // If it's a bonus, check current value
             if (c.metadata?.source === 'BUNDLE_BONUS') {
