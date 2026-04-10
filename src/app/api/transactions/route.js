@@ -450,55 +450,62 @@ export async function POST(request) {
                     const getBundleSplitConfig = (type, name, total, dynSplits) => {
                         // HIGH PRIORITY: Use dynamic splits from database if defined
                         if (dynSplits && Array.isArray(dynSplits) && dynSplits.length > 0) {
-                            return { splits: dynSplits, bonusBundle: total, label: name };
+                            return { splits: dynSplits, bonusBundle: total, label: name, bundleTypeKey: type || 'custom' };
                         }
 
                         // First check explicit bundle_type from database
                         if (type === 'family') {
-                            return { splits: [3, 5, 7, 10], bonusBundle: 25, label: 'عائلة' };
+                            return { splits: [3, 5, 7, 10], bonusBundle: 25, label: 'عائلة', bundleTypeKey: 'family' };
                         }
                         if (type === 'meat_family') {
-                            return { splits: [2, 2, 3, 3], bonusBundle: 10, label: 'لحمة عائلة' };
+                            return { splits: [2, 2, 3, 3], bonusBundle: 10, label: 'لحمة عائلة', bundleTypeKey: 'meat_family' };
                         }
                         if (type === 'youth') {
-                            return { splits: [2, 4, 3, 3], bonusBundle: 12, label: 'شباب' };
+                            return { splits: [2, 4, 3, 3], bonusBundle: 12, label: 'شباب', bundleTypeKey: 'youth' };
                         }
                         if (type === 'meat_individual') {
-                            return { splits: [2.5, 2.5], bonusBundle: 5, label: 'لحمة أفراد' };
+                            return { splits: [2.5, 2.5], bonusBundle: 5, label: 'لحمة أفراد', bundleTypeKey: 'meat_individual' };
                         }
                         if (type === 'individual') {
-                            return { splits: [3, 3, 3, 3], bonusBundle: 12, label: 'أفراد' };
+                            return { splits: [3, 3, 3, 3], bonusBundle: 12, label: 'أفراد', bundleTypeKey: 'individual' };
                         }
 
                         // Fallback: analyze campaign name for backward compatibility
                         const lowerName = (name || '').toLowerCase();
                         if (lowerName.includes('عائل') && !lowerName.includes('لحم')) {
-                            return { splits: [3, 5, 7, 10], bonusBundle: 25, label: 'عائلة' };
+                            return { splits: [3, 5, 7, 10], bonusBundle: 25, label: 'عائلة', bundleTypeKey: 'family' };
                         }
                         if (lowerName.includes('لحم') && lowerName.includes('عائل')) {
-                            return { splits: [2, 2, 3, 3], bonusBundle: 10, label: 'لحمة عائلة' };
+                            return { splits: [2, 2, 3, 3], bonusBundle: 10, label: 'لحمة عائلة', bundleTypeKey: 'meat_family' };
                         }
                         if (lowerName.includes('شباب')) {
-                            return { splits: [2, 4, 3, 3], bonusBundle: 12, label: 'شباب' };
+                            return { splits: [2, 4, 3, 3], bonusBundle: 12, label: 'شباب', bundleTypeKey: 'youth' };
                         }
                         if (lowerName.includes('لحم') && (lowerName.includes('افراد') || lowerName.includes('أفراد') || lowerName.includes('فرد'))) {
-                            return { splits: [2.5, 2.5], bonusBundle: 5, label: 'لحمة أفراد' };
+                            return { splits: [2.5, 2.5], bonusBundle: 5, label: 'لحمة أفراد', bundleTypeKey: 'meat_individual' };
                         }
                         if (lowerName.includes('افراد') || lowerName.includes('أفراد') || lowerName.includes('فرد')) {
-                            return { splits: [3, 3, 3, 3], bonusBundle: 12, label: 'أفراد' };
+                            return { splits: [3, 3, 3, 3], bonusBundle: 12, label: 'أفراد', bundleTypeKey: 'individual' };
                         }
 
                         // Default: Split total into 4 equal parts + bonus bundle
                         const part = Math.round((total / 4) * 10) / 10;
-                        return { splits: [part, part, part, part], bonusBundle: total, label: 'افتراضي' };
+                        return { splits: [part, part, part, part], bonusBundle: total, label: 'افتراضي', bundleTypeKey: type || 'default' };
                     };
 
                     const splitConfig = getBundleSplitConfig(bundleType, campaignName, totalDiscount, customSplits);
-                    const { splits, bonusBundle, label } = splitConfig;
+                    const { splits, bonusBundle, label, bundleTypeKey } = splitConfig;
                     console.log(`[BUNDLE] ${label}: Creating ${splits.length} coupons:`, splits, `+ bonus ${bonusBundle}%`);
 
                     let expires_at = null;
-                    if (targetCampaign.validity_days) {
+                    const isFamilyMonthlyBundle = bundleTypeKey === 'family' && splits.length === 4;
+                    if (isFamilyMonthlyBundle) {
+                        // Family sections live within the current calendar month only.
+                        const endOfMonth = new Date();
+                        endOfMonth.setMonth(endOfMonth.getMonth() + 1, 0);
+                        endOfMonth.setHours(23, 59, 59, 999);
+                        expires_at = endOfMonth.toISOString();
+                    } else if (targetCampaign.validity_days) {
                         const d = new Date();
                         d.setDate(d.getDate() + targetCampaign.validity_days);
                         expires_at = d.toISOString();
@@ -521,7 +528,10 @@ export async function POST(request) {
                             total_parts: items_total_count,
                             discount_value: discountValue,
                             original_total: totalDiscount,
-                            bundle_type: label
+                            bundle_type: label,
+                            bundle_type_key: bundleTypeKey,
+                            monthly_cycle: isFamilyMonthlyBundle,
+                            section_week: isFamilyMonthlyBundle ? index + 1 : null
                         },
                         expires_at
                     }));
@@ -540,7 +550,10 @@ export async function POST(request) {
                             total_parts: items_total_count,
                             discount_value: bonusBundle,
                             original_total: totalDiscount,
-                            bundle_type: label
+                            bundle_type: label,
+                            bundle_type_key: bundleTypeKey,
+                            monthly_cycle: isFamilyMonthlyBundle,
+                            section_week: null
                         },
                         expires_at
                     });

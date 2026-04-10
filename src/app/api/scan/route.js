@@ -95,17 +95,37 @@ export async function POST(request) {
         // But the API itself should return the card status
         const isLinked = !!customer;
 
-        const now = new Date().toISOString();
+        const nowDate = new Date();
 
-        // 6. Active Coupons (Include those with NO expiration date)
-        const { data: coupons, error: couponsError } = customer
+        // 6. Active Coupons (enforce status + expiry in JS to avoid broad OR query behavior)
+        const { data: rawCoupons, error: couponsError } = customer
             ? await supabaseAdmin
                 .from('customer_coupons')
                 .select('*, campaigns(*)')
                 .eq('customer_id', customer.id) // ✅ FILTER BY CUSTOMER ID
-                .or(`status.eq.ACTIVE,status.eq.active`)
-                .or(`expires_at.is.null,expires_at.gt.${now}`)
             : { data: [], error: null };
+
+        const coupons = (rawCoupons || []).filter((c) => {
+            const status = String(c?.status || '').toUpperCase();
+            const isActive = status === 'ACTIVE';
+            const notExpired = !c?.expires_at || new Date(c.expires_at) > nowDate;
+            return isActive && notExpired;
+        });
+
+        const expiredActiveCouponIds = (rawCoupons || [])
+            .filter((c) => {
+                const status = String(c?.status || '').toUpperCase();
+                return status === 'ACTIVE' && c?.expires_at && new Date(c.expires_at) <= nowDate;
+            })
+            .map((c) => c.id)
+            .filter(Boolean);
+
+        if (expiredActiveCouponIds.length > 0) {
+            await supabaseAdmin
+                .from('customer_coupons')
+                .update({ status: 'EXPIRED' })
+                .in('id', expiredActiveCouponIds);
+        }
 
         // 7. Get available campaigns filtered by customer type
         const { data: campaigns, error: campaignsError } = await supabaseAdmin
@@ -168,11 +188,17 @@ export async function GET(request) {
         }
 
         // 2. Get Active Quotas (Coupons)
-        const { data: activeQuotas, error: quotasError } = await supabaseAdmin
+        const { data: rawActiveQuotas, error: quotasError } = await supabaseAdmin
             .from('customer_coupons')
             .select('*, campaigns(*)')
-            .eq('customer_id', customer_id) // ✅ FILTER BY CUSTOMER ID
-            .or(`status.eq.ACTIVE,status.eq.active`)
+            .eq('customer_id', customer_id); // ✅ FILTER BY CUSTOMER ID
+
+        const activeQuotas = (rawActiveQuotas || []).filter((c) => {
+            const status = String(c?.status || '').toUpperCase();
+            const isActive = status === 'ACTIVE';
+            const notExpired = !c?.expires_at || new Date(c.expires_at) > new Date();
+            return isActive && notExpired;
+        });
 
 
         // 3. Get Available Campaigns/Bundles

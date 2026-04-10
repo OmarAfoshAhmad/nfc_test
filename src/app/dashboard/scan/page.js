@@ -1010,6 +1010,21 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
 
     const parseMoney = (value) => parseFloat(normalizeNumericInput(value)) || 0;
 
+    const getWeekOfMonth = (date) => {
+        const dayOfMonth = date.getDate();
+        return Math.floor((dayOfMonth - 1) / 7) + 1;
+    };
+
+    const getFamilySectionState = (coupon) => {
+        const isMonthlyFamily = coupon?.metadata?.monthly_cycle === true && coupon?.metadata?.bundle_type_key === 'family';
+        const sectionWeek = Number(coupon?.metadata?.section_week || 0);
+        if (!isMonthlyFamily || !sectionWeek) return null;
+
+        const currentWeek = getWeekOfMonth(new Date());
+        if (currentWeek > sectionWeek) return 'orange';
+        return 'green';
+    };
+
 
 
     // Filter valid coupons - Show individually (no grouping for split bundles)
@@ -1701,52 +1716,86 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                                             const campaignNameStr = (coupon.campaigns?.name || '').toLowerCase();
                                             const bType = coupon.metadata?.bundle_type || '';
                                             const isMeat = bType.includes('meat') || campaignNameStr.includes('لحم');
+                                            const familySectionState = getFamilySectionState(coupon);
+                                            const isFamilyWeeklySection = familySectionState !== null;
+
+                                            const cardClass = isFamilyWeeklySection
+                                                ? (isSelected
+                                                    ? (familySectionState === 'orange'
+                                                        ? 'bg-orange-600 border-orange-400 scale-105 ring-4 ring-orange-500/20'
+                                                        : 'bg-green-600 border-green-400 scale-105 ring-4 ring-green-500/20')
+                                                    : (familySectionState === 'orange'
+                                                        ? 'bg-gradient-to-br from-orange-900 to-orange-950 border-orange-800 hover:border-orange-500 hover:scale-[1.05] active:scale-95'
+                                                        : 'bg-gradient-to-br from-green-900 to-green-950 border-green-800 hover:border-green-500 hover:scale-[1.05] active:scale-95'))
+                                                : (isSelected
+                                                    ? (isMeat
+                                                        ? 'bg-red-600 border-red-400 scale-105 ring-4 ring-red-500/20'
+                                                        : 'bg-purple-600 border-purple-400 scale-105 ring-4 ring-purple-500/20')
+                                                    : (isMeat
+                                                        ? 'bg-gradient-to-br from-red-900 to-red-950 border-red-800 hover:border-red-500 hover:scale-[1.05] active:scale-95'
+                                                        : 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 hover:border-purple-500 hover:scale-[1.05] active:scale-95'));
+
+                                            const titleClass = isSelected
+                                                ? 'text-white'
+                                                : (isFamilyWeeklySection
+                                                    ? (familySectionState === 'orange' ? 'text-orange-100 group-hover:text-orange-50' : 'text-green-100 group-hover:text-green-50')
+                                                    : (isMeat ? 'text-red-300 group-hover:text-red-200' : 'text-white group-hover:text-purple-400'));
+
+                                            const subtitleClass = isSelected
+                                                ? (isFamilyWeeklySection
+                                                    ? (familySectionState === 'orange' ? 'text-orange-200' : 'text-green-200')
+                                                    : (isMeat ? 'text-red-200' : 'text-purple-200'))
+                                                : (isFamilyWeeklySection
+                                                    ? (familySectionState === 'orange' ? 'text-orange-300/80 group-hover:text-orange-200' : 'text-green-300/80 group-hover:text-green-200')
+                                                    : (isMeat ? 'text-red-400/70 group-hover:text-red-300' : 'text-slate-400 dark:text-slate-500 group-hover:text-purple-400/70'));
 
                                             return (
                                                 <button
                                                     key={coupon.id}
                                                     onClick={() => handleSelectCoupon(coupon)}
                                                     disabled={loading}
-                                                    className={`relative group border p-2.5 rounded-2xl flex flex-col items-center justify-center min-w-[70px] h-20 transition-all shadow-xl disabled:opacity-50
-                                                    ${isSelected
-                                                            ? isMeat
-                                                                ? 'bg-red-600 border-red-400 scale-105 ring-4 ring-red-500/20'
-                                                                : 'bg-purple-600 border-purple-400 scale-105 ring-4 ring-purple-500/20'
-                                                            : isMeat
-                                                                ? 'bg-gradient-to-br from-red-900 to-red-950 border-red-800 hover:border-red-500 hover:scale-[1.05] active:scale-95'
-                                                                : 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 hover:border-purple-500 hover:scale-[1.05] active:scale-95'
-                                                        }
-                                                `}
+                                                    className={`relative group border p-2.5 rounded-2xl flex flex-col items-center justify-center min-w-[70px] h-20 transition-all shadow-xl disabled:opacity-50 ${cardClass}`}
                                                 >
                                                     {/* Part Badge - For split bundles */}
                                                     {partLabel && (
                                                         <div className={`absolute -top-1.5 -right-1.5 text-[8px] font-black px-1.5 py-0.5 rounded-full z-10 
                                                         ${isSelected
-                                                                ? isMeat ? 'bg-white text-red-600' : 'bg-white text-purple-600'
-                                                                : isMeat
-                                                                    ? 'bg-gradient-to-br from-red-500 to-red-600 text-white border border-red-900'
-                                                                    : 'bg-gradient-to-br from-amber-500 to-amber-600 text-white border border-slate-900'}`}>
+                                                                ? (isFamilyWeeklySection
+                                                                    ? (familySectionState === 'orange' ? 'bg-white text-orange-600' : 'bg-white text-green-600')
+                                                                    : (isMeat ? 'bg-white text-red-600' : 'bg-white text-purple-600'))
+                                                                : (isFamilyWeeklySection
+                                                                    ? (familySectionState === 'orange'
+                                                                        ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white border border-orange-900'
+                                                                        : 'bg-gradient-to-br from-green-500 to-green-600 text-white border border-green-900')
+                                                                    : (isMeat
+                                                                        ? 'bg-gradient-to-br from-red-500 to-red-600 text-white border border-red-900'
+                                                                        : 'bg-gradient-to-br from-amber-500 to-amber-600 text-white border border-slate-900'))}`}>
                                                             {partLabel}
                                                         </div>
                                                     )}
                                                     {reward.type === 'PERCENTAGE' ? (
-                                                        <span className={`text-xl font-black mb-0 transition-colors ${isSelected ? 'text-white' : isMeat ? 'text-red-300 group-hover:text-red-200' : 'text-white group-hover:text-purple-400'}`}>
+                                                        <span className={`text-xl font-black mb-0 transition-colors ${titleClass}`}>
                                                             {displayDiscount}%
                                                         </span>
                                                     ) : (
-                                                        <span className={`text-xl font-black mb-0 transition-colors ${isSelected ? 'text-white' : isMeat ? 'text-red-300 group-hover:text-red-200' : 'text-white group-hover:text-purple-400'}`}>
+                                                        <span className={`text-xl font-black mb-0 transition-colors ${titleClass}`}>
                                                             {currency}{displayDiscount}
                                                         </span>
                                                     )}
                                                     <span className={`text-[9px] font-bold uppercase tracking-tighter text-center line-clamp-1 leading-none transition-colors mt-0.5
-                                                    ${isSelected
-                                                            ? isMeat ? 'text-red-200' : 'text-purple-200'
-                                                            : isMeat ? 'text-red-400/70 group-hover:text-red-300' : 'text-slate-400 dark:text-slate-500 group-hover:text-purple-400/70'}
+                                                    ${subtitleClass}
                                                 `}>
                                                         {partNum === 'BONUS' ? (language === 'ar' ? 'بونص' : 'BONUS') : (coupon.campaigns?.name || 'Package')}
                                                     </span>
 
-                                                    {!isSelected && <div className={`absolute inset-0 ${isMeat ? 'bg-red-500/5' : 'bg-purple-500/5'} opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl`} />}
+                                                    {!isSelected && (
+                                                        <div
+                                                            className={`absolute inset-0 ${isFamilyWeeklySection
+                                                                ? (familySectionState === 'orange' ? 'bg-orange-500/5' : 'bg-green-500/5')
+                                                                : (isMeat ? 'bg-red-500/5' : 'bg-purple-500/5')
+                                                                } opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl`}
+                                                        />
+                                                    )}
                                                 </button>
                                             );
                                         })}
