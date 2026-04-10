@@ -1020,7 +1020,14 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
         const sectionWeek = Number(coupon?.metadata?.section_week || 0);
         if (!isMonthlyFamily || !sectionWeek) return null;
 
-        const currentWeek = getWeekOfMonth(new Date());
+        const now = new Date();
+        const cycleStartRaw = coupon?.metadata?.cycle_start_at;
+        const cycleStart = cycleStartRaw ? new Date(cycleStartRaw) : null;
+
+        // Do not start weekly cancellation/orange state before the configured cycle start.
+        if (cycleStart && now < cycleStart) return 'green';
+
+        const currentWeek = getWeekOfMonth(now);
         if (currentWeek > sectionWeek) return 'orange';
         return 'green';
     };

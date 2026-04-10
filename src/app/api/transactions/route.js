@@ -499,12 +499,17 @@ export async function POST(request) {
 
                     let expires_at = null;
                     const isFamilyMonthlyBundle = bundleTypeKey === 'family' && splits.length === 4;
+                    let cycle_start_at = null;
+                    let cycle_end_at = null;
                     if (isFamilyMonthlyBundle) {
-                        // Family sections live within the current calendar month only.
-                        const endOfMonth = new Date();
-                        endOfMonth.setMonth(endOfMonth.getMonth() + 1, 0);
-                        endOfMonth.setHours(23, 59, 59, 999);
-                        expires_at = endOfMonth.toISOString();
+                        // Weekly counting for family starts from the first day of NEXT month after recharge.
+                        const now = new Date();
+                        const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0, 0);
+                        const endOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59, 999);
+
+                        cycle_start_at = startOfNextMonth.toISOString();
+                        cycle_end_at = endOfNextMonth.toISOString();
+                        expires_at = cycle_end_at;
                     } else if (targetCampaign.validity_days) {
                         const d = new Date();
                         d.setDate(d.getDate() + targetCampaign.validity_days);
@@ -531,7 +536,9 @@ export async function POST(request) {
                             bundle_type: label,
                             bundle_type_key: bundleTypeKey,
                             monthly_cycle: isFamilyMonthlyBundle,
-                            section_week: isFamilyMonthlyBundle ? index + 1 : null
+                            section_week: isFamilyMonthlyBundle ? index + 1 : null,
+                            cycle_start_at,
+                            cycle_end_at
                         },
                         expires_at
                     }));
@@ -553,7 +560,9 @@ export async function POST(request) {
                             bundle_type: label,
                             bundle_type_key: bundleTypeKey,
                             monthly_cycle: isFamilyMonthlyBundle,
-                            section_week: null
+                            section_week: null,
+                            cycle_start_at,
+                            cycle_end_at
                         },
                         expires_at
                     });
