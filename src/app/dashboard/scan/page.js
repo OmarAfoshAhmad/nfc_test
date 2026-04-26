@@ -158,10 +158,21 @@ export default function ScanPage() {
                     // Update specific terminal's last_sync for real-time online/offline indicator
                     setTerminals(prev =>
                         prev.map(t =>
-                            t.id === payload.new.id
+                            t.id === payload.new.id ? { ...t, ...payload.new } : t
+                        )
+                    );
+                }
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'scan_events'
+                },
                 (payload) => {
                     const { terminal_id, created_at } = payload.new;
-                    // Check if this terminal belongs to our currently loaded terminals
+
                     if (terminals.some(t => t.id === terminal_id)) {
                         console.log(`[Realtime-Status] Activity detected for Terminal ${terminal_id}`);
                         setTerminalActivity(prev => ({
