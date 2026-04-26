@@ -994,6 +994,8 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
     const [selectedCouponGroup, setSelectedCouponGroup] = useState(null); // CHANGED: Track selected group
     const [manualAmount, setManualAmount] = useState('');
     const [showAmountAlert, setShowAmountAlert] = useState(false);
+    const [showDiscountChoice, setShowDiscountChoice] = useState(false);
+    const [pendingCouponGroup, setPendingCouponGroup] = useState(null);
 
     // Top-up / Buy Package Modal
     const [showPartialPayment, setShowPartialPayment] = useState(false);
@@ -1348,13 +1350,61 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
 
         if (selectedCouponGroup?.id === group.id) {
             setSelectedCouponGroup(null); // Deselect
-        } else {
-            setSelectedCouponGroup(group);
+            return;
         }
+
+        // Show choice dialog: Apply discount or Postpone
+        setPendingCouponGroup(group);
+        setShowDiscountChoice(true);
     };
 
     return (
         <div className="flex flex-col h-full relative">
+
+            {/* --- DISCOUNT OR POSTPONE CHOICE DIALOG --- */}
+            {showDiscountChoice && pendingCouponGroup && (
+                <div className="absolute inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm rounded-3xl p-6 flex items-center justify-center animate-in fade-in duration-200">
+                    <div className="w-full max-w-sm bg-slate-900 border border-slate-700 rounded-3xl p-8 shadow-2xl text-center transform animate-in zoom-in-95 duration-200">
+                        <div className="w-16 h-16 bg-purple-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Percent size={30} className="text-purple-400" />
+                        </div>
+                        <h3 className="text-xl font-bold text-white mb-1">
+                            {language === 'ar' ? 'اختر الإجراء' : 'Choose Action'}
+                        </h3>
+                        <p className="text-slate-400 text-sm mb-2 font-medium">
+                            {pendingCouponGroup.campaigns?.name || (language === 'ar' ? 'الباقة' : 'Package')}
+                        </p>
+                        <p className="text-slate-500 text-xs mb-8 leading-relaxed">
+                            {language === 'ar'
+                                ? 'هل تريد تطبيق الخصم الآن على هذه الفاتورة، أم تأجيله لوقت لاحق؟'
+                                : 'Do you want to apply the discount now or postpone it?'}
+                        </p>
+                        <div className="flex flex-col gap-3">
+                            <button
+                                onClick={() => {
+                                    setSelectedCouponGroup(pendingCouponGroup);
+                                    setPendingCouponGroup(null);
+                                    setShowDiscountChoice(false);
+                                }}
+                                className="w-full bg-gradient-to-br from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 text-white font-bold py-4 rounded-2xl transition-all active:scale-95 shadow-lg shadow-purple-600/20 flex items-center justify-center gap-2"
+                            >
+                                <CheckCircle2 size={20} />
+                                {language === 'ar' ? 'تطبيق الخصم الآن' : 'Apply Discount Now'}
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setPendingCouponGroup(null);
+                                    setShowDiscountChoice(false);
+                                }}
+                                className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 hover:border-slate-500 text-slate-300 hover:text-white font-bold py-4 rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2"
+                            >
+                                <XCircle size={20} />
+                                {language === 'ar' ? 'تأجيل لاحقاً' : 'Postpone'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* --- MISSING AMOUNT ALERT DIALOG --- */}
             {showAmountAlert && (
