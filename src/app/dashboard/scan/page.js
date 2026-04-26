@@ -1014,6 +1014,23 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
         return 'green';
     };
 
+
+    // ✅ Load postponed coupon IDs from localStorage on mount / key change
+    useEffect(() => {
+        if (!postponedStorageKey) {
+            setPostponedCouponIds([]);
+            return;
+        }
+
+        try {
+            const rawValue = localStorage.getItem(postponedStorageKey);
+            const parsedValue = rawValue ? JSON.parse(rawValue) : [];
+            setPostponedCouponIds(Array.isArray(parsedValue) ? parsedValue : []);
+        } catch {
+            setPostponedCouponIds([]);
+        }
+    }, [postponedStorageKey]);
+
     // Filter valid coupons - Show individually (no grouping for split bundles)
     const walletItems = customerCoupons
         .filter(c => {
@@ -1042,21 +1059,7 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
             part: coupon.metadata?.part || null
         }));
 
-    useEffect(() => {
-        if (!postponedStorageKey) {
-            setPostponedCouponIds([]);
-            return;
-        }
-
-        try {
-            const rawValue = localStorage.getItem(postponedStorageKey);
-            const parsedValue = rawValue ? JSON.parse(rawValue) : [];
-            setPostponedCouponIds(Array.isArray(parsedValue) ? parsedValue : []);
-        } catch {
-            setPostponedCouponIds([]);
-        }
-    }, [postponedStorageKey]);
-
+    // ✅ Sync postponed IDs with localStorage — clean up stale entries
     useEffect(() => {
         if (!postponedStorageKey) return;
 
@@ -1805,38 +1808,38 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                                             const cardClass = isManuallyPostponed
                                                 ? 'bg-gradient-to-br from-orange-900 to-orange-950 border-orange-700 hover:border-orange-500 hover:scale-[1.05] active:scale-95'
                                                 : isFamilyWeeklySection
-                                                ? (isSelected
-                                                    ? (familySectionState === 'orange'
-                                                        ? 'bg-orange-600 border-orange-400 scale-105 ring-4 ring-orange-500/20'
-                                                        : 'bg-green-600 border-green-400 scale-105 ring-4 ring-green-500/20')
-                                                    : (familySectionState === 'orange'
-                                                        ? 'bg-gradient-to-br from-orange-900 to-orange-950 border-orange-800 hover:border-orange-500 hover:scale-[1.05] active:scale-95'
-                                                        : 'bg-gradient-to-br from-green-900 to-green-950 border-green-800 hover:border-green-500 hover:scale-[1.05] active:scale-95'))
-                                                : (isSelected
-                                                    ? (isMeat
-                                                        ? 'bg-red-600 border-red-400 scale-105 ring-4 ring-red-500/20'
-                                                        : 'bg-purple-600 border-purple-400 scale-105 ring-4 ring-purple-500/20')
-                                                    : (isMeat
-                                                        ? 'bg-gradient-to-br from-red-900 to-red-950 border-red-800 hover:border-red-500 hover:scale-[1.05] active:scale-95'
-                                                        : 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 hover:border-purple-500 hover:scale-[1.05] active:scale-95'));
+                                                    ? (isSelected
+                                                        ? (familySectionState === 'orange'
+                                                            ? 'bg-orange-600 border-orange-400 scale-105 ring-4 ring-orange-500/20'
+                                                            : 'bg-green-600 border-green-400 scale-105 ring-4 ring-green-500/20')
+                                                        : (familySectionState === 'orange'
+                                                            ? 'bg-gradient-to-br from-orange-900 to-orange-950 border-orange-800 hover:border-orange-500 hover:scale-[1.05] active:scale-95'
+                                                            : 'bg-gradient-to-br from-green-900 to-green-950 border-green-800 hover:border-green-500 hover:scale-[1.05] active:scale-95'))
+                                                    : (isSelected
+                                                        ? (isMeat
+                                                            ? 'bg-red-600 border-red-400 scale-105 ring-4 ring-red-500/20'
+                                                            : 'bg-purple-600 border-purple-400 scale-105 ring-4 ring-purple-500/20')
+                                                        : (isMeat
+                                                            ? 'bg-gradient-to-br from-red-900 to-red-950 border-red-800 hover:border-red-500 hover:scale-[1.05] active:scale-95'
+                                                            : 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 hover:border-purple-500 hover:scale-[1.05] active:scale-95'));
 
                                             const titleClass = isManuallyPostponed
                                                 ? 'text-orange-100 group-hover:text-orange-50'
                                                 : isSelected
-                                                ? 'text-white'
-                                                : (isFamilyWeeklySection
-                                                    ? (familySectionState === 'orange' ? 'text-orange-100 group-hover:text-orange-50' : 'text-green-100 group-hover:text-green-50')
-                                                    : (isMeat ? 'text-red-300 group-hover:text-red-200' : 'text-white group-hover:text-purple-400'));
+                                                    ? 'text-white'
+                                                    : (isFamilyWeeklySection
+                                                        ? (familySectionState === 'orange' ? 'text-orange-100 group-hover:text-orange-50' : 'text-green-100 group-hover:text-green-50')
+                                                        : (isMeat ? 'text-red-300 group-hover:text-red-200' : 'text-white group-hover:text-purple-400'));
 
                                             const subtitleClass = isManuallyPostponed
                                                 ? 'text-orange-300/80 group-hover:text-orange-200'
                                                 : isSelected
-                                                ? (isFamilyWeeklySection
-                                                    ? (familySectionState === 'orange' ? 'text-orange-200' : 'text-green-200')
-                                                    : (isMeat ? 'text-red-200' : 'text-purple-200'))
-                                                : (isFamilyWeeklySection
-                                                    ? (familySectionState === 'orange' ? 'text-orange-300/80 group-hover:text-orange-200' : 'text-green-300/80 group-hover:text-green-200')
-                                                    : (isMeat ? 'text-red-400/70 group-hover:text-red-300' : 'text-slate-400 dark:text-slate-500 group-hover:text-purple-400/70'));
+                                                    ? (isFamilyWeeklySection
+                                                        ? (familySectionState === 'orange' ? 'text-orange-200' : 'text-green-200')
+                                                        : (isMeat ? 'text-red-200' : 'text-purple-200'))
+                                                    : (isFamilyWeeklySection
+                                                        ? (familySectionState === 'orange' ? 'text-orange-300/80 group-hover:text-orange-200' : 'text-green-300/80 group-hover:text-green-200')
+                                                        : (isMeat ? 'text-red-400/70 group-hover:text-red-300' : 'text-slate-400 dark:text-slate-500 group-hover:text-purple-400/70'));
 
                                             return (
                                                 <button
@@ -1856,16 +1859,16 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                                                         ${isManuallyPostponed
                                                                 ? 'bg-white text-orange-600'
                                                                 : isSelected
-                                                                ? (isFamilyWeeklySection
-                                                                    ? (familySectionState === 'orange' ? 'bg-white text-orange-600' : 'bg-white text-green-600')
-                                                                    : (isMeat ? 'bg-white text-red-600' : 'bg-white text-purple-600'))
-                                                                : (isFamilyWeeklySection
-                                                                    ? (familySectionState === 'orange'
-                                                                        ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white border border-orange-900'
-                                                                        : 'bg-gradient-to-br from-green-500 to-green-600 text-white border border-green-900')
-                                                                    : (isMeat
-                                                                        ? 'bg-gradient-to-br from-red-500 to-red-600 text-white border border-red-900'
-                                                                        : 'bg-gradient-to-br from-amber-500 to-amber-600 text-white border border-slate-900'))}`}>
+                                                                    ? (isFamilyWeeklySection
+                                                                        ? (familySectionState === 'orange' ? 'bg-white text-orange-600' : 'bg-white text-green-600')
+                                                                        : (isMeat ? 'bg-white text-red-600' : 'bg-white text-purple-600'))
+                                                                    : (isFamilyWeeklySection
+                                                                        ? (familySectionState === 'orange'
+                                                                            ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white border border-orange-900'
+                                                                            : 'bg-gradient-to-br from-green-500 to-green-600 text-white border border-green-900')
+                                                                        : (isMeat
+                                                                            ? 'bg-gradient-to-br from-red-500 to-red-600 text-white border border-red-900'
+                                                                            : 'bg-gradient-to-br from-amber-500 to-amber-600 text-white border border-slate-900'))}`}>
                                                             {partLabel}
                                                         </div>
                                                     )}
@@ -1889,8 +1892,8 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                                                             className={`absolute inset-0 ${isManuallyPostponed
                                                                 ? 'bg-orange-500/5'
                                                                 : isFamilyWeeklySection
-                                                                ? (familySectionState === 'orange' ? 'bg-orange-500/5' : 'bg-green-500/5')
-                                                                : (isMeat ? 'bg-red-500/5' : 'bg-purple-500/5')
+                                                                    ? (familySectionState === 'orange' ? 'bg-orange-500/5' : 'bg-green-500/5')
+                                                                    : (isMeat ? 'bg-red-500/5' : 'bg-purple-500/5')
                                                                 } opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl`}
                                                         />
                                                     )}
