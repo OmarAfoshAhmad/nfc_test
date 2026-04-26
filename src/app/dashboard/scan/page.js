@@ -996,12 +996,16 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
     const [showAmountAlert, setShowAmountAlert] = useState(false);
     const [showDiscountChoice, setShowDiscountChoice] = useState(false);
     const [pendingCouponGroup, setPendingCouponGroup] = useState(null);
+    const [postponedCouponIds, setPostponedCouponIds] = useState([]);
 
     // Top-up / Buy Package Modal
     const [showPartialPayment, setShowPartialPayment] = useState(false);
     const [partialAmount, setPartialAmount] = useState('');
     const [showStore, setShowStore] = useState(false);
     const customerCoupons = Array.isArray(coupons) ? coupons : [];
+    const postponedStorageKey = customer?.id && card?.id
+        ? `postponed_coupon_ids:${customer.id}:${card.id}`
+        : null;
 
     const normalizeNumericInput = (value) => String(value || '')
         .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632))
@@ -1050,6 +1054,43 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
             if (familyState === 'expired') return false;
 
             // If it's a bonus, check current value
+
+    useEffect(() => {
+        if (!postponedStorageKey) {
+            setPostponedCouponIds([]);
+            return;
+        }
+
+        try {
+            const rawValue = localStorage.getItem(postponedStorageKey);
+            const parsedValue = rawValue ? JSON.parse(rawValue) : [];
+            setPostponedCouponIds(Array.isArray(parsedValue) ? parsedValue : []);
+        } catch {
+            setPostponedCouponIds([]);
+        }
+    }, [postponedStorageKey]);
+
+    useEffect(() => {
+        if (!postponedStorageKey) return;
+
+        const activeCouponIds = new Set(walletItems.map(item => item.id));
+        const filteredIds = postponedCouponIds.filter(id => activeCouponIds.has(id));
+
+        if (filteredIds.length !== postponedCouponIds.length) {
+            setPostponedCouponIds(filteredIds);
+            return;
+        }
+
+        try {
+            if (filteredIds.length > 0) {
+                localStorage.setItem(postponedStorageKey, JSON.stringify(filteredIds));
+            } else {
+                localStorage.removeItem(postponedStorageKey);
+            }
+        } catch {
+            // Ignore localStorage write failures and keep UI state in memory.
+        }
+    }, [postponedCouponIds, postponedStorageKey, walletItems]);
             if (c.metadata?.source === 'BUNDLE_BONUS') {
                 const bonusVal = c.metadata?.current_bonus_value;
                 if (bonusVal === 0 || bonusVal === '0') return false;
@@ -1325,6 +1366,7 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                 setTimeout(() => setFlashEffect(null), 1000);
 
                 // Clear state
+                setPostponedCouponIds(prev => prev.filter(id => id !== couponId));
                 setSelectedCouponGroup(null);
                 setAmount('');
 
@@ -1382,6 +1424,7 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                         <div className="flex flex-col gap-3">
                             <button
                                 onClick={() => {
+                                    setPostponedCouponIds(prev => prev.filter(id => id !== pendingCouponGroup.id));
                                     setSelectedCouponGroup(pendingCouponGroup);
                                     setPendingCouponGroup(null);
                                     setShowDiscountChoice(false);
@@ -1393,6 +1436,9 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                             </button>
                             <button
                                 onClick={() => {
+                                    setPostponedCouponIds(prev => prev.includes(pendingCouponGroup.id)
+                                        ? prev
+                                        : [...prev, pendingCouponGroup.id]);
                                     setPendingCouponGroup(null);
                                     setShowDiscountChoice(false);
                                 }}
@@ -1770,6 +1816,7 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                                         {sortedItems.map(coupon => {
                                             const reward = coupon.campaigns?.reward_config || {};
                                             const isSelected = selectedCouponGroup?.id === coupon.id;
+                                            const isManuallyPostponed = postponedCouponIds.includes(coupon.id);
                                             const displayDiscount = coupon.individualDiscount ?? reward.value;
 
                                             // Dynamic Part Label: part/total (e.g., 1/4)
@@ -1782,8 +1829,12 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                                             const isMeat = bType.includes('meat') || campaignNameStr.includes('لحم');
                                             const familySectionState = getFamilySectionState(coupon);
                                             const isFamilyWeeklySection = familySectionState !== null;
+                                            const isAutoPostponed = isFamilyWeeklySection && familySectionState === 'orange';
+                                            const isPostponed = isManuallyPostponed || isAutoPostponed;
 
-                                            const cardClass = isFamilyWeeklySection
+                                            const cardClass = isManuallyPostponed
+                                                ? 'bg-gradient-to-br from-orange-900 to-orange-950 border-orange-700 hover:border-orange-500 hover:scale-[1.05] active:scale-95'
+                                                : isFamilyWeeklySection
                                                 ? (isSelected
                                                     ? (familySectionState === 'orange'
                                                         ? 'bg-orange-600 border-orange-400 scale-105 ring-4 ring-orange-500/20'
@@ -1799,13 +1850,17 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                                                         ? 'bg-gradient-to-br from-red-900 to-red-950 border-red-800 hover:border-red-500 hover:scale-[1.05] active:scale-95'
                                                         : 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 hover:border-purple-500 hover:scale-[1.05] active:scale-95'));
 
-                                            const titleClass = isSelected
+                                            const titleClass = isManuallyPostponed
+                                                ? 'text-orange-100 group-hover:text-orange-50'
+                                                : isSelected
                                                 ? 'text-white'
                                                 : (isFamilyWeeklySection
                                                     ? (familySectionState === 'orange' ? 'text-orange-100 group-hover:text-orange-50' : 'text-green-100 group-hover:text-green-50')
                                                     : (isMeat ? 'text-red-300 group-hover:text-red-200' : 'text-white group-hover:text-purple-400'));
 
-                                            const subtitleClass = isSelected
+                                            const subtitleClass = isManuallyPostponed
+                                                ? 'text-orange-300/80 group-hover:text-orange-200'
+                                                : isSelected
                                                 ? (isFamilyWeeklySection
                                                     ? (familySectionState === 'orange' ? 'text-orange-200' : 'text-green-200')
                                                     : (isMeat ? 'text-red-200' : 'text-purple-200'))
@@ -1820,10 +1875,17 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
                                                     disabled={loading}
                                                     className={`relative group border p-2.5 rounded-2xl flex flex-col items-center justify-center min-w-[70px] h-20 transition-all shadow-xl disabled:opacity-50 ${cardClass}`}
                                                 >
+                                                    {isPostponed && (
+                                                        <div className="absolute top-1.5 left-1.5 text-[8px] font-black px-1.5 py-0.5 rounded-full z-10 bg-orange-500 text-white border border-orange-300/30 uppercase tracking-wide">
+                                                            {language === 'ar' ? 'مؤجل' : 'POSTPONED'}
+                                                        </div>
+                                                    )}
                                                     {/* Part Badge - For split bundles */}
                                                     {partLabel && (
                                                         <div className={`absolute -top-1.5 -right-1.5 text-[8px] font-black px-1.5 py-0.5 rounded-full z-10 
-                                                        ${isSelected
+                                                        ${isManuallyPostponed
+                                                                ? 'bg-white text-orange-600'
+                                                                : isSelected
                                                                 ? (isFamilyWeeklySection
                                                                     ? (familySectionState === 'orange' ? 'bg-white text-orange-600' : 'bg-white text-green-600')
                                                                     : (isMeat ? 'bg-white text-red-600' : 'bg-white text-purple-600'))
@@ -1854,7 +1916,9 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
 
                                                     {!isSelected && (
                                                         <div
-                                                            className={`absolute inset-0 ${isFamilyWeeklySection
+                                                            className={`absolute inset-0 ${isManuallyPostponed
+                                                                ? 'bg-orange-500/5'
+                                                                : isFamilyWeeklySection
                                                                 ? (familySectionState === 'orange' ? 'bg-orange-500/5' : 'bg-green-500/5')
                                                                 : (isMeat ? 'bg-red-500/5' : 'bg-purple-500/5')
                                                                 } opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl`}
