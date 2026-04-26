@@ -159,45 +159,6 @@ export default function ScanPage() {
                     setTerminals(prev =>
                         prev.map(t =>
                             t.id === payload.new.id
-                                ? { ...t, last_sync: payload.new.last_sync }
-                                : t
-                        )
-                    );
-                }
-            );
-
-        // Subscribe and handle connection status
-        channel.subscribe((status) => {
-            console.log(`[Realtime-Terminals] Subscription status: ${status}`);
-            if (status === 'SUBSCRIBED') {
-                console.log('✅ [Realtime-Terminals] Terminal monitoring ACTIVE');
-            } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-                console.warn('⚠️ [Realtime-Terminals] Connection issue:', status);
-            }
-        });
-
-        return () => {
-            console.log(`[Realtime-Terminals] Cleaning up channel for Branch ${selectedBranch}`);
-            channel.unsubscribe();
-            supabase.removeChannel(channel);
-        };
-    }, [selectedBranch]);
-
-    // Realtime Global Terminal Status for the Branch
-    useEffect(() => {
-        if (!selectedBranch) return;
-
-        console.log(`[Realtime-Status] Monitoring all terminals in Branch: ${selectedBranch}`);
-
-        const channel = supabase
-            .channel(`branch-status-${selectedBranch}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'scan_events'
-                },
                 (payload) => {
                     const { terminal_id, created_at } = payload.new;
                     // Check if this terminal belongs to our currently loaded terminals
@@ -1042,8 +1003,6 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
         return 'green';
     };
 
-
-
     // Filter valid coupons - Show individually (no grouping for split bundles)
     const walletItems = customerCoupons
         .filter(c => {
@@ -1054,6 +1013,23 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
             if (familyState === 'expired') return false;
 
             // If it's a bonus, check current value
+            if (c.metadata?.source === 'BUNDLE_BONUS') {
+                const bonusVal = c.metadata?.current_bonus_value;
+                if (bonusVal === 0 || bonusVal === '0') return false;
+            }
+
+            // For split parts (paid package), hide if metadata says part is 0 (should already be USED but just in case)
+            const p = c.metadata?.part;
+            if (p === 0 || p === '0') return false;
+
+            return true;
+        })
+        .map(coupon => ({
+            ...coupon,
+            individualDiscount: coupon.metadata?.current_bonus_value ?? coupon.metadata?.discount_value ?? null,
+            originalTotal: coupon.metadata?.original_total || null,
+            part: coupon.metadata?.part || null
+        }));
 
     useEffect(() => {
         if (!postponedStorageKey) {
@@ -1091,23 +1067,6 @@ function CheckoutForm({ customer, card, rewards, coupons, manualCampaigns, campa
             // Ignore localStorage write failures and keep UI state in memory.
         }
     }, [postponedCouponIds, postponedStorageKey, walletItems]);
-            if (c.metadata?.source === 'BUNDLE_BONUS') {
-                const bonusVal = c.metadata?.current_bonus_value;
-                if (bonusVal === 0 || bonusVal === '0') return false;
-            }
-
-            // For split parts (paid package), hide if metadata says part is 0 (should already be USED but just in case)
-            const p = c.metadata?.part;
-            if (p === 0 || p === '0') return false;
-
-            return true;
-        })
-        .map(coupon => ({
-            ...coupon,
-            individualDiscount: coupon.metadata?.current_bonus_value ?? coupon.metadata?.discount_value ?? null,
-            originalTotal: coupon.metadata?.original_total || null,
-            part: coupon.metadata?.part || null
-        }));
 
     // --- CALCULATIONS FOR PREVIEW ---
     const billAmount = parseMoney(amount);
